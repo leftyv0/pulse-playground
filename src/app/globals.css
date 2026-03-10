@@ -1,0 +1,120 @@
+@import "tailwindcss";
+
+:root {
+  --color-primary: #6366f1;
+  --color-secondary: #8b5cf6;
+  --color-background: #0a0a0f;
+  --color-surface: #1a1a2e;
+  --color-text: #e2e8f0;
+  --color-accent: #22d3ee;
+  --color-error: #ef4444;
+  --color-success: #22c55e;
+  --color-border: #2a2a4a;
+
+  --font-sans: var(--font-geist-sans), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), monospace;
+  --text-base-size: 16px;
+  --text-scale-ratio: 1.25;
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-bold: 700;
+  --line-height-tight: 1.2;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+  --letter-spacing-tight: -0.025em;
+  --letter-spacing-normal: 0em;
+  --letter-spacing-wide: 0.05em;
+
+  --spacing-base: 4px;
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 32px;
+  --spacing-xl: 64px;
+
+  --radius-none: 0px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.4);
+
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+  --duration-slow: 500ms;
+  --easing-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --easing-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --hover-scale: 1.05;
+  --press-scale: 0.95;
+}
+
+@theme inline {
+  --color-primary: var(--color-primary);
+  --color-secondary: var(--color-secondary);
+  --color-background: var(--color-background);
+  --color-surface: var(--color-surface);
+  --color-text: var(--color-text);
+  --color-accent: var(--color-accent);
+  --color-error: var(--color-error);
+  --color-success: var(--color-success);
+  --color-border: var(--color-border);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+
+  --radius-none: var(--radius-none);
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
+  --radius-full: var(--radius-full);
+
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-glow: var(--shadow-glow);
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-base-size);
+  line-height: var(--line-height-normal);
+}
+
+/* Custom scrollbar for Leva panels */
+.leva-scrollable,
+.leva-scrollable *,
+div[class*="leva"] {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 102, 241, 0.3) transparent;
+}
+
+.leva-scrollable::-webkit-scrollbar,
+.leva-scrollable *::-webkit-scrollbar,
+div[class*="leva"]::-webkit-scrollbar {
+  width: 5px;
+}
+
+.leva-scrollable::-webkit-scrollbar-track,
+.leva-scrollable *::-webkit-scrollbar-track,
+div[class*="leva"]::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.leva-scrollable::-webkit-scrollbar-thumb,
+.leva-scrollable *::-webkit-scrollbar-thumb,
+div[class*="leva"]::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.3);
+  border-radius: 9999px;
+}
+
+.leva-scrollable::-webkit-scrollbar-thumb:hover,
+.leva-scrollable *::-webkit-scrollbar-thumb:hover,
+div[class*="leva"]::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.5);
+}

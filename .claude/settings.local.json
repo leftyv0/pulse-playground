@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-next-app@latest:*)",
+      "Bash(rm:*)",
+      "Bash(pnpm add:*)",
+      "Bash(pnpm build:*)",
+      "Bash(mkdir:*)",
+      "Bash(npx tsc:*)",
+      "Bash(pnpm dev:*)",
+      "Bash(curl:*)",
+      "Bash(xargs grep:*)",
+      "Bash(timeout 15 npx next:*)",
+      "WebSearch",
+      "WebFetch(domain:meyda.js.org)",
+      "Bash(powershell.exe:*)",
+      "Bash(wc:*)",
+      "Bash(npx next:*)",
+      "Bash(pnpm install:*)",
+      "Bash(xargs ls:*)",
+      "Bash(node:*)",
+      "Bash(npx add-mcp:*)",
+      "Bash(ls:*)",
+      "Bash(claude mcp:*)",
+      "WebFetch(domain:agentation.dev)",
+      "mcp__agentation__agentation_get_all_pending",
+      "mcp__agentation__agentation_list_sessions",
+      "Bash(grep:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:leva.pmnd.rs)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:sbcode.net)",
+      "WebFetch(domain:www.dhiwise.com)"
+    ]
+  }
+}
