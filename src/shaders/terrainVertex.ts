@@ -15,10 +15,19 @@ uniform float uGain;
 uniform float uCameraZ;
 uniform float uGridSize;
 
+// Fall-off uniforms
+uniform float uFalloffStart;
+uniform float uFalloffEnd;
+uniform float uPointSizeFalloff;
+uniform float uNearFade;
+uniform float uLateralFalloff;
+
 // Road uniforms
 uniform float uRoadEnabled;
 uniform float uRoadWidth;
 uniform float uRoadEdgeSoftness;
+uniform float uRoadCurveAmplitude;
+uniform float uRoadCurveFrequency;
 
 // Footpath uniforms
 uniform float uFootpathEnabled;
@@ -29,6 +38,7 @@ uniform float uFootpathEdgeSoftness;
 varying float vHeight;
 varying float vRoadMask;
 varying float vFootpathMask;
+varying float vFalloff;
 
 ${noiseGlsl}
 
@@ -43,13 +53,14 @@ void main() {
   vec2 noiseCoord = pos.xz * uFrequency;
   float h = getNoise(noiseCoord) * uAmplitude;
 
-  // Road: flatten terrain along X=0
+  // Road: flatten terrain along a sinusoidal curve
+  float roadCenterX = uRoadCurveAmplitude * sin(pos.z * uRoadCurveFrequency);
   float halfWidth = uRoadWidth * 0.5;
-  float distFromCenter = abs(pos.x);
+  float distFromCenter = abs(pos.x - roadCenterX);
   float roadFactor = 1.0 - smoothstep(halfWidth - uRoadEdgeSoftness, halfWidth, distFromCenter);
   roadFactor *= uRoadEnabled;
 
-  // Footpaths: flat strips flanking the road
+  // Footpaths: flat strips flanking the curved road
   float fpInner = halfWidth + uFootpathGap;
   float fpOuter = fpInner + uFootpathWidth;
   float fpFactor = smoothstep(fpInner - uFootpathEdgeSoftness, fpInner, distFromCenter)
@@ -67,7 +78,22 @@ void main() {
   vFootpathMask = fpFactor * (1.0 - roadFactor); // exclude road overlap
 
   vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
-  gl_PointSize = uPointSize * (300.0 / -mvPosition.z);
+
+  // Distance fall-off (normalized 0..1 where 1 = at camera, 0 = at grid edge)
+  float distZ = abs(pos.z - uCameraZ) / halfGrid;
+  float distX = abs(pos.x) / halfGrid;
+  float dist = max(distZ, distX * uLateralFalloff);
+
+  // Far fall-off: fade from falloffStart to falloffEnd
+  float farFade = 1.0 - smoothstep(uFalloffStart, uFalloffEnd, dist);
+  // Near fall-off: fade in from 0 to nearFade distance
+  float nearFadeVal = smoothstep(0.0, uNearFade, distZ);
+  vFalloff = farFade * nearFadeVal;
+
+  // Shrink point size with distance based on pointSizeFalloff strength
+  float sizeFactor = mix(1.0, vFalloff, uPointSizeFalloff);
+  gl_PointSize = uPointSize * sizeFactor * (300.0 / -mvPosition.z);
+
   gl_Position = projectionMatrix * mvPosition;
 }
 `;

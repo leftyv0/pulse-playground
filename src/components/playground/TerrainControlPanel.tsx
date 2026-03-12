@@ -119,6 +119,53 @@ export function TerrainControlPanel() {
             if (!skipSync.current) store.getState().setGridDensity(v);
           },
         },
+        "Density Fall-off": folder({
+          "Falloff Start": {
+            value: store.getState().falloffStart,
+            min: 0.05,
+            max: 1.0,
+            step: 0.01,
+            onChange: (v: number) => {
+              if (!skipSync.current) store.getState().setFalloffStart(v);
+            },
+          },
+          "Falloff End": {
+            value: store.getState().falloffEnd,
+            min: 0.1,
+            max: 1.0,
+            step: 0.01,
+            onChange: (v: number) => {
+              if (!skipSync.current) store.getState().setFalloffEnd(v);
+            },
+          },
+          "Size Falloff": {
+            value: store.getState().pointSizeFalloff,
+            min: 0,
+            max: 1,
+            step: 0.01,
+            onChange: (v: number) => {
+              if (!skipSync.current) store.getState().setPointSizeFalloff(v);
+            },
+          },
+          "Near Fade": {
+            value: store.getState().nearFade,
+            min: 0,
+            max: 0.3,
+            step: 0.005,
+            onChange: (v: number) => {
+              if (!skipSync.current) store.getState().setNearFade(v);
+            },
+          },
+          "Lateral Falloff": {
+            value: store.getState().lateralFalloff,
+            min: 0,
+            max: 2.0,
+            step: 0.05,
+            onChange: (v: number) => {
+              if (!skipSync.current) store.getState().setLateralFalloff(v);
+            },
+          },
+        }),
         "Color Low": {
           value: store.getState().colorLow,
           onChange: (v: string) => {
@@ -178,6 +225,42 @@ export function TerrainControlPanel() {
             if (!skipSync.current) store.getState().setRoadColor(v);
           },
         },
+        "Curve Amplitude": {
+          value: store.getState().roadCurveAmplitude,
+          min: 0,
+          max: 30,
+          step: 0.5,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setRoadCurveAmplitude(v);
+          },
+        },
+        "Curve Frequency": {
+          value: store.getState().roadCurveFrequency,
+          min: 0.01,
+          max: 0.3,
+          step: 0.005,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setRoadCurveFrequency(v);
+          },
+        },
+        "Road Point Size": {
+          value: store.getState().roadPointSize,
+          min: 0.5,
+          max: 8,
+          step: 0.1,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setRoadPointSize(v);
+          },
+        },
+        "Road Density": {
+          value: store.getState().roadDensity,
+          min: 32,
+          max: 512,
+          step: 16,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setRoadDensity(v);
+          },
+        },
       }),
       Footpaths: folder({
         "FP Enabled": {
@@ -217,6 +300,97 @@ export function TerrainControlPanel() {
           value: store.getState().footpathColor,
           onChange: (v: string) => {
             if (!skipSync.current) store.getState().setFootpathColor(v);
+          },
+        },
+      }),
+      Steering: folder({
+        Sensitivity: {
+          value: store.getState().steerSensitivity,
+          min: 1,
+          max: 12,
+          step: 0.5,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setSteerSensitivity(v);
+          },
+        },
+        "Return Speed": {
+          value: store.getState().steerReturnSpeed,
+          min: 1,
+          max: 20,
+          step: 0.5,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setSteerReturnSpeed(v);
+          },
+        },
+        "Max Lateral": {
+          value: store.getState().steerMaxLateralOffset,
+          min: 0.2,
+          max: 5,
+          step: 0.1,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setSteerMaxLateralOffset(v);
+          },
+        },
+      }),
+      Drift: folder({
+        Enabled: {
+          value: store.getState().driftEnabled,
+          onChange: (v: boolean) => {
+            if (!skipSync.current) store.getState().setDriftEnabled(v);
+          },
+        },
+        "Slide Amount": {
+          value: store.getState().driftGripLoss,
+          min: 0.1,
+          max: 1.0,
+          step: 0.05,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setDriftGripLoss(v);
+          },
+        },
+        "Slip Speed": {
+          value: store.getState().driftSlipRate,
+          min: 0.5,
+          max: 8.0,
+          step: 0.25,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setDriftSlipRate(v);
+          },
+        },
+        Recovery: {
+          value: store.getState().driftRecovery,
+          min: 0.5,
+          max: 10.0,
+          step: 0.25,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setDriftRecovery(v);
+          },
+        },
+        "Max Angle": {
+          value: store.getState().driftMaxAngle,
+          min: 0.1,
+          max: 1.2,
+          step: 0.05,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setDriftMaxAngle(v);
+          },
+        },
+        "Body Lean": {
+          value: store.getState().driftLeanMultiplier,
+          min: 0.5,
+          max: 5.0,
+          step: 0.25,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setDriftLeanMultiplier(v);
+          },
+        },
+        "Lateral Range": {
+          value: store.getState().lateralRange,
+          min: 0.2,
+          max: 3.0,
+          step: 0.1,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setLateralRange(v);
           },
         },
       }),
@@ -454,6 +628,7 @@ export function TerrainControlPanel() {
   useEffect(() => {
     return useTerrainStore.subscribe((state) => {
       skipSync.current = true;
+      try {
       levaStore.setValueAtPath("Noise Type", state.noiseType, false);
       levaStore.setValueAtPath("Noise Params.Amplitude", state.amplitude, false);
       levaStore.setValueAtPath("Noise Params.Frequency", state.frequency, false);
@@ -463,6 +638,11 @@ export function TerrainControlPanel() {
       levaStore.setValueAtPath("FBM.Gain", state.gain, false);
       levaStore.setValueAtPath("Visual.Point Size", state.pointSize, false);
       levaStore.setValueAtPath("Visual.Grid Density", state.gridDensity, false);
+      levaStore.setValueAtPath("Visual.Density Fall-off.Falloff Start", state.falloffStart, false);
+      levaStore.setValueAtPath("Visual.Density Fall-off.Falloff End", state.falloffEnd, false);
+      levaStore.setValueAtPath("Visual.Density Fall-off.Size Falloff", state.pointSizeFalloff, false);
+      levaStore.setValueAtPath("Visual.Density Fall-off.Near Fade", state.nearFade, false);
+      levaStore.setValueAtPath("Visual.Density Fall-off.Lateral Falloff", state.lateralFalloff, false);
       levaStore.setValueAtPath("Visual.Color Low", state.colorLow, false);
       levaStore.setValueAtPath("Visual.Color Mid", state.colorMid, false);
       levaStore.setValueAtPath("Visual.Color High", state.colorHigh, false);
@@ -471,11 +651,25 @@ export function TerrainControlPanel() {
       levaStore.setValueAtPath("Road.Width", state.roadWidth, false);
       levaStore.setValueAtPath("Road.Edge Softness", state.roadEdgeSoftness, false);
       levaStore.setValueAtPath("Road.Road Color", state.roadColor, false);
+      levaStore.setValueAtPath("Road.Curve Amplitude", state.roadCurveAmplitude, false);
+      levaStore.setValueAtPath("Road.Curve Frequency", state.roadCurveFrequency, false);
+      levaStore.setValueAtPath("Road.Road Point Size", state.roadPointSize, false);
+      levaStore.setValueAtPath("Road.Road Density", state.roadDensity, false);
       levaStore.setValueAtPath("Footpaths.FP Enabled", state.footpathEnabled, false);
       levaStore.setValueAtPath("Footpaths.FP Width", state.footpathWidth, false);
       levaStore.setValueAtPath("Footpaths.FP Gap", state.footpathGap, false);
       levaStore.setValueAtPath("Footpaths.FP Edge Softness", state.footpathEdgeSoftness, false);
       levaStore.setValueAtPath("Footpaths.FP Color", state.footpathColor, false);
+      levaStore.setValueAtPath("Steering.Sensitivity", state.steerSensitivity, false);
+      levaStore.setValueAtPath("Steering.Return Speed", state.steerReturnSpeed, false);
+      levaStore.setValueAtPath("Steering.Max Lateral", state.steerMaxLateralOffset, false);
+      levaStore.setValueAtPath("Drift.Enabled", state.driftEnabled, false);
+      levaStore.setValueAtPath("Drift.Slide Amount", state.driftGripLoss, false);
+      levaStore.setValueAtPath("Drift.Slip Speed", state.driftSlipRate, false);
+      levaStore.setValueAtPath("Drift.Recovery", state.driftRecovery, false);
+      levaStore.setValueAtPath("Drift.Max Angle", state.driftMaxAngle, false);
+      levaStore.setValueAtPath("Drift.Body Lean", state.driftLeanMultiplier, false);
+      levaStore.setValueAtPath("Drift.Lateral Range", state.lateralRange, false);
       levaStore.setValueAtPath("Camera.Height", state.cameraHeight, false);
       levaStore.setValueAtPath("Camera.Tilt", state.cameraTilt, false);
       levaStore.setValueAtPath("Camera.Fly Speed", state.flySpeed, false);
@@ -495,6 +689,7 @@ export function TerrainControlPanel() {
       levaStore.setValueAtPath("Audio Mapping.Color → Sensitivity", state.audioColor.sensitivity, false);
       levaStore.setValueAtPath("Audio Mapping.Octaves → Feature", state.audioOctaves.feature, false);
       levaStore.setValueAtPath("Audio Mapping.Octaves → Sensitivity", state.audioOctaves.sensitivity, false);
+      } catch { /* leva store not yet ready */ }
       skipSync.current = false;
     });
   }, [levaStore]);

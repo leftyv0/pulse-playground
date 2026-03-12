@@ -2,6 +2,7 @@
 
 import { useAudioStore } from "@/store/audioStore";
 import { Sparkline } from "./Sparkline";
+import { AudioHistogram } from "./AudioHistogram";
 import { useSparklineData } from "@/hooks/useSparklineData";
 import type { StatKey } from "@/lib/statsHistory";
 
@@ -85,6 +86,7 @@ export function StatsPanel() {
         >
           Meyda Stats
         </div>
+        <AudioHistogram />
         {sections.map((section) => (
           <div key={section.title} className="mb-2">
             <div

@@ -32,7 +32,16 @@
       "Bash(gh api:*)",
       "WebFetch(domain:deepwiki.com)",
       "WebFetch(domain:sbcode.net)",
-      "WebFetch(domain:www.dhiwise.com)"
+      "WebFetch(domain:www.dhiwise.com)",
+      "mcp__paper__get_basic_info",
+      "mcp__paper__get_font_family_info",
+      "mcp__paper__create_artboard",
+      "mcp__paper__update_styles",
+      "mcp__paper__write_html",
+      "mcp__paper__get_screenshot",
+      "mcp__paper__finish_working_on_nodes",
+      "mcp__paper__get_tree_summary",
+      "Bash(find /n/personal-projects/pulse-playground -maxdepth 2 \\\\\\( -name \"*.md\" -o -name \"*.config.*\" -o -name \"package.json\" \\\\\\) 2>/dev/null | grep -v node_modules)"
     ]
   }
 }
