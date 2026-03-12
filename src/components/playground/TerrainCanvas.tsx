@@ -17,21 +17,6 @@ function hexToVec3(hex: string): THREE.Vector3 {
   return new THREE.Vector3(c.r, c.g, c.b);
 }
 
-const AUDIO_FEATURES = [
-  "none",
-  "energy",
-  "rms",
-  "bass",
-  "mid",
-  "treble",
-  "volume",
-  "spectralCentroid",
-  "spectralFlux",
-  "spectralFlatness",
-  "perceptualSharpness",
-  "loudnessTotal",
-  "zcr",
-] as const;
 
 function getAudioValue(feature: string): number {
   if (feature === "none") return 0;
@@ -45,14 +30,14 @@ function getAudioValue(feature: string): number {
 
 /* ── Keyboard tracking ─────────────────────────────────────── */
 function useKeyboard() {
-  const keys = useRef<Record<string, boolean>>({});
+  const keysRef = useRef<Record<string, boolean>>({});
 
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
-      keys.current[e.key.toLowerCase()] = true;
+      keysRef.current[e.key.toLowerCase()] = true;
     };
     const onUp = (e: KeyboardEvent) => {
-      keys.current[e.key.toLowerCase()] = false;
+      keysRef.current[e.key.toLowerCase()] = false;
     };
     window.addEventListener("keydown", onDown);
     window.addEventListener("keyup", onUp);
@@ -62,20 +47,20 @@ function useKeyboard() {
     };
   }, []);
 
-  return keys;
+  return keysRef;
 }
 
 /* ── Retro car with drift physics ──────────────────────────── */
 function RetroCar({
-  scrollZ,
-  carX,
-  forwardSpeed,
-  keys,
+  scrollZRef,
+  carXRef,
+  forwardSpeedRef,
+  keysRef,
 }: {
-  scrollZ: React.MutableRefObject<number>;
-  carX: React.MutableRefObject<number>;
-  forwardSpeed: React.MutableRefObject<number>;
-  keys: React.MutableRefObject<Record<string, boolean>>;
+  scrollZRef: React.MutableRefObject<number>;
+  carXRef: React.MutableRefObject<number>;
+  forwardSpeedRef: React.MutableRefObject<number>;
+  keysRef: React.MutableRefObject<Record<string, boolean>>;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const swayAngle = useRef(0); // current Z-rotation (lean)
@@ -84,7 +69,6 @@ function RetroCar({
 
   // Drift state
   const slipAngle = useRef(0); // current rear slip angle (-1..1, sign = direction)
-  const driftActive = useRef(false);
   const lateralVelocity = useRef(0); // actual lateral movement speed
 
   // Wheel refs for spin animation
@@ -130,30 +114,30 @@ function RetroCar({
     const cruiseSpeed = maxForwardSpeed * 0.5;
 
     let throttle = 0;
-    if (keys.current["w"] || keys.current["arrowup"]) throttle = 1;
-    if (keys.current["s"] || keys.current["arrowdown"]) throttle = -1;
+    if (keysRef.current["w"] || keysRef.current["arrowup"]) throttle = 1;
+    if (keysRef.current["s"] || keysRef.current["arrowdown"]) throttle = -1;
 
     if (throttle > 0) {
-      forwardSpeed.current += acceleration * delta;
+      forwardSpeedRef.current += acceleration * delta;
     } else if (throttle < 0) {
-      if (forwardSpeed.current > cruiseSpeed) {
-        forwardSpeed.current -= brakeForce * delta;
-        forwardSpeed.current = Math.max(cruiseSpeed, forwardSpeed.current);
+      if (forwardSpeedRef.current > cruiseSpeed) {
+        forwardSpeedRef.current -= brakeForce * delta;
+        forwardSpeedRef.current = Math.max(cruiseSpeed, forwardSpeedRef.current);
       }
     } else {
-      const diff = cruiseSpeed - forwardSpeed.current;
-      forwardSpeed.current += diff * 2 * delta;
+      const diff = cruiseSpeed - forwardSpeedRef.current;
+      forwardSpeedRef.current += diff * 2 * delta;
     }
-    forwardSpeed.current = Math.max(cruiseSpeed, Math.min(maxForwardSpeed, forwardSpeed.current));
+    forwardSpeedRef.current = Math.max(cruiseSpeed, Math.min(maxForwardSpeed, forwardSpeedRef.current));
 
     // ── Steering input ──────────────────────────────────────
     let input = 0;
-    if (keys.current["a"] || keys.current["arrowleft"]) input -= 1;
-    if (keys.current["d"] || keys.current["arrowright"]) input += 1;
+    if (keysRef.current["a"] || keysRef.current["arrowleft"]) input -= 1;
+    if (keysRef.current["d"] || keysRef.current["arrowright"]) input += 1;
 
     // ── Combined steer + drift ────────────────────────────────
     // Steering automatically builds slip angle — no separate drift key
-    const speedNorm = forwardSpeed.current / maxForwardSpeed;
+    const speedNorm = forwardSpeedRef.current / maxForwardSpeed;
 
     if (driftEnabled && input !== 0) {
       // Build slip in the steering direction, proportional to speed
@@ -182,11 +166,11 @@ function RetroCar({
     if (input !== 0) {
       // Steer acceleration + drift slide combined
       const steerForce = input * lateralAccel;
-      const driftForce = slipAngle.current * forwardSpeed.current * driftGripLoss;
+      const driftForce = slipAngle.current * forwardSpeedRef.current * driftGripLoss;
       lateralVelocity.current += (steerForce + driftForce) * delta;
     } else if (isDrifting) {
       // No input but still sliding from drift momentum
-      const driftForce = slipAngle.current * forwardSpeed.current * driftGripLoss * 0.5;
+      const driftForce = slipAngle.current * forwardSpeedRef.current * driftGripLoss * 0.5;
       lateralVelocity.current += driftForce * delta;
     }
 
@@ -207,47 +191,62 @@ function RetroCar({
     lateralVelocity.current = THREE.MathUtils.clamp(lateralVelocity.current, -maxLatVel, maxLatVel);
 
     // Integrate velocity → position
-    carX.current += lateralVelocity.current * delta;
+    carXRef.current += lateralVelocity.current * delta;
 
     // Spring return to center when no input and not drifting
     if (input === 0 && !isDrifting) {
-      carX.current = THREE.MathUtils.lerp(carX.current, 0, 1 - Math.exp(-steerReturn * 0.5 * delta));
-      if (Math.abs(carX.current) < 0.01 && Math.abs(lateralVelocity.current) < 0.01) {
-        carX.current = 0;
+      carXRef.current = THREE.MathUtils.lerp(carXRef.current, 0, 1 - Math.exp(-steerReturn * 0.5 * delta));
+      if (Math.abs(carXRef.current) < 0.01 && Math.abs(lateralVelocity.current) < 0.01) {
+        carXRef.current = 0;
       }
     }
 
-    // Soft road boundary — progressive resistance
+    // Road boundary — progressive deceleration, no hard bounce
     if (effectiveMaxLateral > 0) {
-      const boundaryRatio = Math.abs(carX.current) / effectiveMaxLateral;
-      if (boundaryRatio > 0.7) {
-        const resistAmount = Math.pow(Math.min((boundaryRatio - 0.7) / 0.3, 1), 2);
-        // Push position back and dampen velocity
-        lateralVelocity.current *= (1 - resistAmount * 0.8);
-        carX.current = THREE.MathUtils.lerp(
-          carX.current,
-          Math.sign(carX.current) * effectiveMaxLateral * 0.7,
-          resistAmount * (1 - Math.exp(-6 * delta))
-        );
-        // Smoothly reduce slip near edge
-        slipAngle.current = THREE.MathUtils.lerp(slipAngle.current, 0, resistAmount * (1 - Math.exp(-3 * delta)));
+      const absX = Math.abs(carXRef.current);
+      const sign = Math.sign(carXRef.current);
+      const movingOutward = Math.sign(lateralVelocity.current) === sign;
+
+      // Start braking zone at 60% of max lateral
+      const brakeStart = effectiveMaxLateral * 0.6;
+
+      if (absX > brakeStart) {
+        // 0 at brakeStart → 1 at effectiveMaxLateral
+        const t = Math.min((absX - brakeStart) / (effectiveMaxLateral - brakeStart), 1);
+        // Cubic ramp: gentle at first, aggressive near edge
+        const strength = t * t * t;
+
+        if (movingOutward) {
+          // Progressive velocity damping — stronger near edge
+          const damping = 1 - strength * 0.92;
+          lateralVelocity.current *= damping;
+
+          // Push-back force that increases near edge (prevents overshoot)
+          const pushBack = strength * steerSensitivity * 3.0 * lateralRange;
+          lateralVelocity.current -= sign * pushBack * delta;
+
+          // Don't touch slipAngle — preserve drift pose at the edge
+        }
       }
-      // Hard safety clamp
-      const hardLimit = effectiveMaxLateral * 1.1;
-      if (Math.abs(carX.current) > hardLimit) {
-        carX.current = Math.sign(carX.current) * hardLimit;
-        lateralVelocity.current *= -0.3; // bounce back
+
+      // Soft clamp — only if somehow past the edge, gently pull back
+      if (absX > effectiveMaxLateral) {
+        const overshoot = absX - effectiveMaxLateral;
+        // Spring force pulling back proportional to overshoot
+        lateralVelocity.current -= sign * overshoot * 15 * delta;
+        // Gently ease position back (don't snap)
+        carXRef.current = THREE.MathUtils.lerp(carXRef.current, sign * effectiveMaxLateral, 1 - Math.exp(-10 * delta));
       }
     }
 
     // ── Curved road following ─────────────────────────────────
     const curveAmp = t.roadCurveAmplitude;
     const curveFreq = t.roadCurveFrequency;
-    const roadCenterX = curveAmp * Math.sin(scrollZ.current * curveFreq);
+    const roadCenterX = curveAmp * Math.sin(scrollZRef.current * curveFreq);
 
     // Road tangent: dx/dz = amp * freq * cos(z * freq)
     // Car travels in -Z, so forward tangent is (-dx/dz, -1) → yaw = atan2(-dx/dz, -1)
-    const dxdz = curveAmp * curveFreq * Math.cos(scrollZ.current * curveFreq);
+    const dxdz = curveAmp * curveFreq * Math.cos(scrollZRef.current * curveFreq);
     const roadYaw = Math.atan2(-dxdz, -1);
 
     // Perpendicular offset: the lateral offset should be perpendicular to the road tangent
@@ -256,8 +255,8 @@ function RetroCar({
     const perpZ = -dxdz / tangentLen; // perpendicular Z component (normalized)
 
     // Car world position = road center + lateral offset along perpendicular
-    const worldX = roadCenterX + carX.current * perpX;
-    const worldZ = scrollZ.current + carX.current * perpZ;
+    const worldX = roadCenterX + carXRef.current * perpX;
+    const worldZ = scrollZRef.current + carXRef.current * perpZ;
 
     // ── Body dynamics ───────────────────────────────────────
     // Lean based on lateral velocity (feels responsive) + drift amplification
@@ -287,13 +286,13 @@ function RetroCar({
 
     // Publish driving state for other systems (particles, etc.)
     useDrivingStore.getState().setDriving(
-      forwardSpeed.current,
-      Math.abs(forwardSpeed.current) / maxForwardSpeed,
-      carX.current
+      forwardSpeedRef.current,
+      Math.abs(forwardSpeedRef.current) / maxForwardSpeed,
+      carXRef.current
     );
 
     // Spin wheels proportional to actual forward speed
-    const wheelSpin = forwardSpeed.current * delta * 3;
+    const wheelSpin = forwardSpeedRef.current * delta * 3;
     // Rear wheels spin faster during drift (loss of traction)
     const rearWheelSpin = wheelSpin * (1 + Math.abs(slipAngle.current) * 2);
     for (let i = 0; i < wheelRefs.length; i++) {
@@ -375,13 +374,13 @@ function RetroCar({
 
 /* ── Terrain mesh that follows the camera ────────────────────── */
 function TerrainPoints({
-  scrollZ,
-  carX,
-  forwardSpeed,
+  scrollZRef,
+  carXRef,
+  forwardSpeedRef,
 }: {
-  scrollZ: React.MutableRefObject<number>;
-  carX: React.MutableRefObject<number>;
-  forwardSpeed: React.MutableRefObject<number>;
+  scrollZRef: React.MutableRefObject<number>;
+  carXRef: React.MutableRefObject<number>;
+  forwardSpeedRef: React.MutableRefObject<number>;
 }) {
   const materialRef = useRef<THREE.ShaderMaterial>(null);
   const noiseTypeRef = useRef<NoiseType>("fbm");
@@ -438,7 +437,7 @@ function TerrainPoints({
 
   const geometry = useMemo(
     () => buildGeometry(terrainState.gridDensity, terrainState.farClip),
-    []
+    [buildGeometry, terrainState.gridDensity, terrainState.farClip]
   );
 
   // Camera lag for lateral following
@@ -455,10 +454,10 @@ function TerrainPoints({
     const u = uniformsRef.current;
 
     // ── Forward scroll driven by car velocity ─────────────────
-    scrollZ.current -= forwardSpeed.current * delta;
+    scrollZRef.current -= forwardSpeedRef.current * delta;
 
     // ── Infinite scrolling: mesh stays at origin, shader wraps vertices ──
-    u.uCameraZ.value = scrollZ.current;
+    u.uCameraZ.value = scrollZRef.current;
     u.uGridSize.value = t.farClip * 2;
 
     // ── Audio mapping ───────────────────────────────────────
@@ -538,12 +537,12 @@ function TerrainPoints({
     // ── Camera follows car along curved road ──────────────────
     const camCurveAmp = t.roadCurveAmplitude;
     const camCurveFreq = t.roadCurveFrequency;
-    const camRoadCenterX = camCurveAmp * Math.sin(scrollZ.current * camCurveFreq);
+    const camRoadCenterX = camCurveAmp * Math.sin(scrollZRef.current * camCurveFreq);
     // Perpendicular offset (same math as car)
-    const camDxdz = camCurveAmp * camCurveFreq * Math.cos(scrollZ.current * camCurveFreq);
+    const camDxdz = camCurveAmp * camCurveFreq * Math.cos(scrollZRef.current * camCurveFreq);
     const camTangentLen = Math.sqrt(camDxdz * camDxdz + 1);
     const camPerpX = 1 / camTangentLen;
-    const camWorldX = camRoadCenterX + carX.current * camPerpX;
+    const camWorldX = camRoadCenterX + carXRef.current * camPerpX;
     cameraLagX.current = THREE.MathUtils.lerp(
       cameraLagX.current,
       camWorldX,
@@ -552,13 +551,13 @@ function TerrainPoints({
 
     // ── Dynamic camera based on acceleration ──────────────────
     const maxSpeed = t.moveSpeed;
-    const accel = (forwardSpeed.current - prevSpeed.current) / Math.max(delta, 0.001);
-    prevSpeed.current = forwardSpeed.current;
+    const accel = (forwardSpeedRef.current - prevSpeed.current) / Math.max(delta, 0.001);
+    prevSpeed.current = forwardSpeedRef.current;
 
     // Normalize acceleration to roughly -1..1 range
     const accelNorm = THREE.MathUtils.clamp(accel / (maxSpeed * 2), -1, 1);
     // Normalize current speed to 0..1
-    const speedNorm = Math.abs(forwardSpeed.current) / maxSpeed;
+    const speedNorm = Math.abs(forwardSpeedRef.current) / maxSpeed;
 
     // Accel tilts camera forward (negative = looking more downward), decel tilts back
     // High speed also pulls camera lower and further back for drama
@@ -577,7 +576,7 @@ function TerrainPoints({
     camera.position.set(
       cameraLagX.current * 0.7,
       t.cameraHeight + cameraHeightOffset.current,
-      scrollZ.current + 10 + cameraZOffset.current
+      scrollZRef.current + 10 + cameraZOffset.current
     );
     camera.rotation.set(t.cameraTilt + cameraTiltOffset.current, 0, 0);
 
@@ -604,9 +603,9 @@ function TerrainPoints({
 
 /* ── Road mesh (independent density/point size) ────────────────── */
 function RoadPoints({
-  scrollZ,
+  scrollZRef,
 }: {
-  scrollZ: React.MutableRefObject<number>;
+  scrollZRef: React.MutableRefObject<number>;
 }) {
   const materialRef = useRef<THREE.ShaderMaterial>(null);
   const pointsRef = useRef<THREE.Points>(null);
@@ -663,14 +662,21 @@ function RoadPoints({
         terrainState.footpathGap,
         terrainState.footpathWidth
       ),
-    []
+    [
+      buildRoadGeometry,
+      terrainState.roadDensity,
+      terrainState.farClip,
+      terrainState.roadWidth,
+      terrainState.footpathGap,
+      terrainState.footpathWidth,
+    ]
   );
 
   useFrame(() => {
     const t = useTerrainStore.getState();
     const u = uniformsRef.current;
 
-    u.uCameraZ.value = scrollZ.current;
+    u.uCameraZ.value = scrollZRef.current;
     u.uGridSize.value = t.farClip * 2;
     u.uRoadCurveAmplitude.value = t.roadCurveAmplitude;
     u.uRoadCurveFrequency.value = t.roadCurveFrequency;
@@ -728,19 +734,28 @@ function RoadPoints({
 
 /* ── Scene orchestrator ──────────────────────────────────────── */
 function Scene() {
-  const scrollZ = useRef(0);
-  const carX = useRef(0);
+  const scrollZRef = useRef(0);
+  const carXRef = useRef(0);
   const initialCruise = useTerrainStore.getState().moveSpeed * 0.5;
-  const forwardSpeed = useRef(initialCruise);
-  const keys = useKeyboard();
+  const forwardSpeedRef = useRef(initialCruise);
+  const keysRef = useKeyboard();
 
   return (
     <>
       <ambientLight intensity={0.3} />
       <pointLight position={[0, 5, -2]} intensity={1} color="#ff66ff" />
-      <TerrainPoints scrollZ={scrollZ} carX={carX} forwardSpeed={forwardSpeed} />
-      <RoadPoints scrollZ={scrollZ} />
-      <RetroCar scrollZ={scrollZ} carX={carX} forwardSpeed={forwardSpeed} keys={keys} />
+      <TerrainPoints
+        scrollZRef={scrollZRef}
+        carXRef={carXRef}
+        forwardSpeedRef={forwardSpeedRef}
+      />
+      <RoadPoints scrollZRef={scrollZRef} />
+      <RetroCar
+        scrollZRef={scrollZRef}
+        carXRef={carXRef}
+        forwardSpeedRef={forwardSpeedRef}
+        keysRef={keysRef}
+      />
       <PostProcessingEffects />
     </>
   );

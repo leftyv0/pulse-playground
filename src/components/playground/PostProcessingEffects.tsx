@@ -31,7 +31,9 @@ function useSyncEffect(
   apply: (state: ReturnType<typeof usePostProcessingStore.getState>) => void
 ) {
   const applyRef = useRef(apply);
-  applyRef.current = apply;
+  useEffect(() => {
+    applyRef.current = apply;
+  }, [apply]);
 
   useEffect(() => {
     // Apply initial values
@@ -265,22 +267,22 @@ function HueSaturationEffect() {
 }
 
 function NoiseEffect() {
-  const s = usePostProcessingStore.getState();
-  const effect = useMemo(
+  const effectRef = useMemo(
     () =>
       new NoiseFX({
         premultiply: true,
         blendFunction: BlendFunction.ADD,
       }),
-    [] // eslint-disable-line react-hooks/exhaustive-deps
+    []
   );
 
   useSyncEffect(["noiseAmount", "noiseOpacity"], (st) => {
-    effect.blendMode.opacity.value = st.noiseOpacity * st.noiseAmount;
+    // eslint-disable-next-line react-hooks/immutability
+    effectRef.blendMode.opacity.value = st.noiseOpacity * st.noiseAmount;
   });
 
-  useEffect(() => () => effect.dispose(), [effect]);
-  return <primitive object={effect} />;
+  useEffect(() => () => effectRef.dispose(), [effectRef]);
+  return <primitive object={effectRef} />;
 }
 
 function PixelationEffect() {

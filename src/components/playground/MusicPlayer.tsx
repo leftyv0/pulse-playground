@@ -24,7 +24,9 @@ export function MusicPlayer() {
   const { tracks, loading, error } = useTracks();
 
   const tracksRef = useRef(tracks);
-  tracksRef.current = tracks;
+  useEffect(() => {
+    tracksRef.current = tracks;
+  }, [tracks]);
 
   // Apply persisted volume on mount and whenever it changes
   useEffect(() => {
@@ -172,7 +174,7 @@ export function MusicPlayer() {
   const autoLoadedRef = useRef(false);
   useEffect(() => {
     if (autoLoadedRef.current || tracks.length === 0) return;
-    const { selectedTrackUrl: url, selectedTrackName: name } = usePlayerStore.getState();
+    const { selectedTrackUrl: url } = usePlayerStore.getState();
     if (url) {
       // Verify track still exists
       const found = tracks.find((t) => t.url === url);

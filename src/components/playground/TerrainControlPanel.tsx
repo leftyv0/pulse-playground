@@ -315,9 +315,9 @@ export function TerrainControlPanel() {
         },
         "Return Speed": {
           value: store.getState().steerReturnSpeed,
-          min: 1,
-          max: 20,
-          step: 0.5,
+          min: 0,
+          max: 5,
+          step: 0.1,
           onChange: (v: number) => {
             if (!skipSync.current) store.getState().setSteerReturnSpeed(v);
           },

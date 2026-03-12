@@ -116,32 +116,32 @@ Additional styling props on `<Leva>` / `<LevaPanel>`:
 
 ## What We Currently Use
 
-### Across All 3 Control Panels
+### Across All 2 Control Panels
 
-**Files:** `ControlPanel.tsx`, `TerrainControlPanel.tsx`, `PostProcessingControlPanel.tsx`
+**Files:** `TerrainControlPanel.tsx`, `PostProcessingControlPanel.tsx`
 
 | Feature | Usage |
 |---------|-------|
-| `useControls` | All 3 panels |
+| `useControls` | Both panels |
 | `useCreateStore` | Each panel creates its own isolated store |
 | `<LevaPanel>` | Rendered per-panel with custom titles |
-| `folder()` | 26 total folders across all panels |
+| `folder()` | 22 total folders across both panels |
 | `onChange` callbacks | Every single control |
 | `setValueAtPath()` | Bidirectional sync with Zustand stores |
 | Custom theming | Dark theme with cyan accents, custom font sizes and widths |
 | `fill` prop | All panels fill their containers |
 | `titleBar: { title }` | Custom titles per panel |
-| Collapsed folders | 13 folders default to collapsed (mostly in PostProcessing) |
+| Collapsed folders | 12 folders default to collapsed (mostly in PostProcessing) |
 | CSS overrides | Custom scrollbar styling via `.leva-scrollable` |
 
 ### Input Types in Use
 
 | Type | Count | Examples |
 |------|-------|---------|
-| Number (slider) | 80+ | Size, Speed, Frequency, Amplitude, Opacity, etc. |
-| Boolean (checkbox) | 20+ | Enable Glow, Size reacts to audio, Mipmap Blur, etc. |
-| Select (dropdown) | 15 | Noise Type, Tone Mapping Mode, Glitch Mode, Audio Feature selectors |
-| Color | 8 | Color Low/Mid/High, Road Color, Footpath Color |
+| Number (slider) | 70+ | Speed, Frequency, Amplitude, Opacity, etc. |
+| Boolean (checkbox) | 15+ | Mipmap Blur, Road Enabled, etc. |
+| Select (dropdown) | 12 | Noise Type, Tone Mapping Mode, Glitch Mode, Audio Feature selectors |
+| Color | 7 | Color Low/Mid/High, Road Color, Footpath Color |
 
 ### Two-Way Sync Architecture
 
