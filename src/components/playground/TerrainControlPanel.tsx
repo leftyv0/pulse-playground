@@ -468,55 +468,104 @@ export function TerrainControlPanel() {
           },
         },
       }),
-      "Car Body": folder({
-        "Body Color": {
-          value: store.getState().carBodyColor,
-          onChange: (v: string) => {
-            if (!skipSync.current) store.getState().setCarBodyColor(v);
-          },
-        },
-        "Cabin Color": {
-          value: store.getState().carCabinColor,
-          onChange: (v: string) => {
-            if (!skipSync.current) store.getState().setCarCabinColor(v);
-          },
-        },
-        Metalness: {
-          value: store.getState().carMetalness,
-          min: 0,
-          max: 1,
-          step: 0.05,
-          onChange: (v: number) => {
-            if (!skipSync.current) store.getState().setCarMetalness(v);
-          },
-        },
-        Roughness: {
-          value: store.getState().carRoughness,
-          min: 0,
-          max: 1,
-          step: 0.05,
-          onChange: (v: number) => {
-            if (!skipSync.current) store.getState().setCarRoughness(v);
-          },
-        },
-        "Wheel Color": {
-          value: store.getState().carWheelColor,
-          onChange: (v: string) => {
-            if (!skipSync.current) store.getState().setCarWheelColor(v);
-          },
-        },
-        "Headlight Color": {
-          value: store.getState().carHeadlightColor,
-          onChange: (v: string) => {
-            if (!skipSync.current) store.getState().setCarHeadlightColor(v);
-          },
-        },
-        "Taillight Color": {
-          value: store.getState().carTaillightColor,
-          onChange: (v: string) => {
-            if (!skipSync.current) store.getState().setCarTaillightColor(v);
-          },
-        },
+      "Car Colors": folder({
+        "Body": folder({
+          ...Object.fromEntries(
+            ["Body Paint", "Chassis"].map((k) => [
+              k,
+              {
+                value: store.getState().carMaterialColors[k] ?? "#ffffff",
+                onChange: (v: string) => {
+                  if (!skipSync.current) store.getState().setCarMaterialColor(k, v);
+                },
+              },
+            ])
+          ),
+        }),
+        "Glass": folder({
+          ...Object.fromEntries(
+            ["Glass"].map((k) => [
+              k,
+              {
+                value: store.getState().carMaterialColors[k] ?? "#ffffff",
+                onChange: (v: string) => {
+                  if (!skipSync.current) store.getState().setCarMaterialColor(k, v);
+                },
+              },
+            ])
+          ),
+        }),
+        "Lights": folder({
+          ...Object.fromEntries(
+            ["Headlight Housing", "Headlight Refractor", "Taillight Glass", "Indicator Glass", "Rear Refractor"].flatMap((k) => {
+              const emissive = store.getState().carEmissiveSettings[k];
+              return [
+                [k, {
+                  value: store.getState().carMaterialColors[k] ?? "#ffffff",
+                  onChange: (v: string) => {
+                    if (!skipSync.current) store.getState().setCarMaterialColor(k, v);
+                  },
+                }],
+                ...(emissive ? [
+                  [`${k} Emissive`, {
+                    value: emissive.color,
+                    onChange: (v: string) => {
+                      if (!skipSync.current) store.getState().setCarEmissiveColor(k, v);
+                    },
+                  }],
+                  [`${k} Intensity`, {
+                    value: emissive.intensity,
+                    min: 0,
+                    max: 10,
+                    step: 0.1,
+                    onChange: (v: number) => {
+                      if (!skipSync.current) store.getState().setCarEmissiveIntensity(k, v);
+                    },
+                  }],
+                ] : []),
+              ];
+            })
+          ),
+        }),
+        "Wheels": folder({
+          ...Object.fromEntries(
+            ["Wheel Rims", "Tyres", "Brake Rotors"].map((k) => [
+              k,
+              {
+                value: store.getState().carMaterialColors[k] ?? "#ffffff",
+                onChange: (v: string) => {
+                  if (!skipSync.current) store.getState().setCarMaterialColor(k, v);
+                },
+              },
+            ])
+          ),
+        }),
+        "Trim": folder({
+          ...Object.fromEntries(
+            ["Chrome", "Badges", "Grille", "Matte Black", "Glossy Black"].map((k) => [
+              k,
+              {
+                value: store.getState().carMaterialColors[k] ?? "#ffffff",
+                onChange: (v: string) => {
+                  if (!skipSync.current) store.getState().setCarMaterialColor(k, v);
+                },
+              },
+            ])
+          ),
+        }),
+        "Interior": folder({
+          ...Object.fromEntries(
+            ["Interior", "Screen"].map((k) => [
+              k,
+              {
+                value: store.getState().carMaterialColors[k] ?? "#ffffff",
+                onChange: (v: string) => {
+                  if (!skipSync.current) store.getState().setCarMaterialColor(k, v);
+                },
+              },
+            ])
+          ),
+        }),
       }),
       "Tron Trails": folder({
         "Trail Enabled": {
@@ -876,13 +925,28 @@ export function TerrainControlPanel() {
       levaStore.setValueAtPath("Drift.Max Angle", state.driftMaxAngle, false);
       levaStore.setValueAtPath("Drift.Body Lean", state.driftLeanMultiplier, false);
       levaStore.setValueAtPath("Drift.Lateral Range", state.lateralRange, false);
-      levaStore.setValueAtPath("Car Body.Body Color", state.carBodyColor, false);
-      levaStore.setValueAtPath("Car Body.Cabin Color", state.carCabinColor, false);
-      levaStore.setValueAtPath("Car Body.Metalness", state.carMetalness, false);
-      levaStore.setValueAtPath("Car Body.Roughness", state.carRoughness, false);
-      levaStore.setValueAtPath("Car Body.Wheel Color", state.carWheelColor, false);
-      levaStore.setValueAtPath("Car Body.Headlight Color", state.carHeadlightColor, false);
-      levaStore.setValueAtPath("Car Body.Taillight Color", state.carTaillightColor, false);
+      // Sync car material colors
+      const matColors = state.carMaterialColors;
+      const carColorGroups: Record<string, string[]> = {
+        Body: ["Body Paint", "Chassis"],
+        Glass: ["Glass"],
+        Lights: ["Headlight Housing", "Headlight Refractor", "Taillight Glass", "Indicator Glass", "Rear Refractor"],
+        Wheels: ["Wheel Rims", "Tyres", "Brake Rotors"],
+        Trim: ["Chrome", "Badges", "Grille", "Matte Black", "Glossy Black"],
+        Interior: ["Interior", "Screen"],
+      };
+      const emissiveSettings = state.carEmissiveSettings;
+      for (const [group, labels] of Object.entries(carColorGroups)) {
+        for (const label of labels) {
+          if (matColors[label]) {
+            levaStore.setValueAtPath(`Car Colors.${group}.${label}`, matColors[label], false);
+          }
+          if (emissiveSettings[label]) {
+            levaStore.setValueAtPath(`Car Colors.${group}.${label} Emissive`, emissiveSettings[label].color, false);
+            levaStore.setValueAtPath(`Car Colors.${group}.${label} Intensity`, emissiveSettings[label].intensity, false);
+          }
+        }
+      }
       levaStore.setValueAtPath("Tron Trails.Trail Enabled", state.trailEnabled, false);
       levaStore.setValueAtPath("Tron Trails.Trail Color", state.trailColor, false);
       levaStore.setValueAtPath("Tron Trails.Trail Type", state.trailType, false);

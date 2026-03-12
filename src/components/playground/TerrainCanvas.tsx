@@ -1,8 +1,9 @@
 "use client";
 
-import { useRef, useMemo, useCallback, useEffect } from "react";
+import React, { useRef, useMemo, useCallback, useEffect } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
+import { useGLTF } from "@react-three/drei";
 import { useTerrainStore, type NoiseType, type TrailType } from "@/store/terrainStore";
 import { useAudioStore } from "@/store/audioStore";
 import { useDrivingStore } from "@/store/drivingStore";
@@ -81,15 +82,112 @@ function RetroCar({
   const slipAngle = useRef(0); // current rear slip angle (-1..1, sign = direction)
   const lateralVelocity = useRef(0); // actual lateral movement speed
 
-  // Wheel refs for spin animation
-  const wheelRefs = [
-    useRef<THREE.Mesh>(null),
-    useRef<THREE.Mesh>(null),
-    useRef<THREE.Mesh>(null),
-    useRef<THREE.Mesh>(null),
+  // Load GLB model
+  const { scene: carScene } = useGLTF("/models/ford_gt_2005/scene.gltf");
+
+  // Scaled model dimensions (set during useMemo)
+  const modelDimsRef = useRef({ halfWidth: 0.85, halfLength: 1.6, bottom: -0.3 });
+  const carScaleRef = useRef(0.006);
+
+  // Friendly name → material name mapping for Ford GT 2005
+  // stripTexture: remove baseColorTexture so color picker controls appearance directly
+  const CAR_MATERIAL_MAP: { label: string; pattern: string; stripTexture?: boolean }[] = [
+    { label: "Body Paint", pattern: "Paint", stripTexture: true },
+    { label: "Chassis", pattern: "Chassis" },
+    { label: "Glass", pattern: "Glass" },
+    { label: "Grille", pattern: "Grille_A" },
+    { label: "Headlight Housing", pattern: "Light" },
+    { label: "Headlight Refractor", pattern: "Refracted" },
+    { label: "Rear Refractor", pattern: "Refracted_2" },
+    { label: "Taillight Glass", pattern: "Red_Glasss" },
+    { label: "Indicator Glass", pattern: "Orange_Glass" },
+    { label: "Interior", pattern: "Interior" },
+    { label: "Screen", pattern: "Screen" },
+    { label: "Matte Black", pattern: "Black" },
+    { label: "Glossy Black", pattern: "Glossy_Black" },
+    { label: "Chrome", pattern: "Chrome" },
+    { label: "Badges", pattern: "Badges" },
+    { label: "Wheel Rims", pattern: "mm_wheel" },
+    { label: "Tyres", pattern: "mm_tyre" },
+    { label: "Brake Rotors", pattern: "mm_rotor" },
   ];
-  // Front wheel steer angle refs
-  const frontWheelYaw = useRef(0);
+
+  // Map of label → material ref (populated once during useMemo)
+  const materialMapRef = useRef<Map<string, THREE.MeshStandardMaterial>>(new Map());
+
+  const carModel = useMemo(() => {
+    const clone = carScene.clone(true);
+
+    // Compute bounding box and center the model at its geometric center
+    const box = new THREE.Box3().setFromObject(clone);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+
+    // Center model at origin
+    clone.position.set(-center.x, -center.y, -center.z);
+
+    // Auto-scale: target car length ~3.2 scene units along longest horizontal axis
+    const targetLength = 3.2;
+    const maxDim = Math.max(size.x, size.z);
+    const scale = targetLength / maxDim;
+    carScaleRef.current = scale;
+
+    // Model dimensions map directly (X→X, Z→Z)
+    modelDimsRef.current = {
+      halfWidth: (size.x * scale) / 2,
+      halfLength: (size.z * scale) / 2,
+      bottom: (-size.y / 2) * scale,
+    };
+
+    // Collect all unique materials from the model
+    const allMats: THREE.MeshStandardMaterial[] = [];
+    clone.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.material) {
+        const mats = Array.isArray(child.material) ? child.material : [child.material];
+        for (const mat of mats) {
+          if (mat.name && !allMats.some((m) => m.name === mat.name)) {
+            allMats.push(mat as THREE.MeshStandardMaterial);
+          }
+        }
+      }
+    });
+
+    // Match materials to friendly labels
+    const map = new Map<string, THREE.MeshStandardMaterial>();
+    for (const { label, pattern, stripTexture } of CAR_MATERIAL_MAP) {
+      // Prefer exact match, then fall back to includes
+      const mat = allMats.find((m) => m.name === pattern)
+        ?? allMats.find((m) => m.name.includes(pattern));
+      if (mat) {
+        if (stripTexture && mat.map) {
+          mat.map = null;
+          mat.needsUpdate = true;
+        }
+        map.set(label, mat);
+      }
+    }
+    materialMapRef.current = map;
+
+    return clone;
+  }, [carScene]);
+
+  // Apply car material colors and emissive settings from store
+  const carMaterialColors = useTerrainStore((s) => s.carMaterialColors);
+  const carEmissiveSettings = useTerrainStore((s) => s.carEmissiveSettings);
+  useEffect(() => {
+    const map = materialMapRef.current;
+    for (const [label, mat] of map) {
+      const hex = carMaterialColors[label];
+      if (hex) {
+        mat.color.set(hex);
+      }
+      const emissive = carEmissiveSettings[label];
+      if (emissive) {
+        if (mat.emissive) mat.emissive.set(emissive.color);
+        mat.emissiveIntensity = emissive.intensity;
+      }
+    }
+  }, [carMaterialColors, carEmissiveSettings]);
 
   useFrame((_state, delta) => {
     if (!groupRef.current) return;
@@ -306,21 +404,23 @@ function RetroCar({
     yawAngle.current = THREE.MathUtils.lerp(yawAngle.current, targetYaw, lerpFactor);
     pitchAngle.current = THREE.MathUtils.lerp(pitchAngle.current, targetPitch, 1 - Math.exp(-6 * delta));
 
-    // Front wheel visual steer
-    const targetWheelYaw = input * 0.35 + (isDrifting ? -slipAngle.current * 0.5 : 0);
-    frontWheelYaw.current = THREE.MathUtils.lerp(frontWheelYaw.current, targetWheelYaw, 1 - Math.exp(-10 * delta));
-
     // Apply transform
     groupRef.current.position.set(worldX, 0.4, worldZ);
     groupRef.current.rotation.set(pitchAngle.current, roadYaw + yawAngle.current, swayAngle.current);
 
     // Publish tire world positions for trail system
     groupRef.current.updateMatrixWorld(true);
+    // Derive tire positions from actual model dimensions
+    const dims = modelDimsRef.current;
+    const trackX = dims.halfWidth * 0.78; // inset from body edge
+    const tireY = dims.bottom + 0.05;     // near ground
+    const frontZ = dims.halfLength * 0.55;
+    const rearZ = -dims.halfLength * 0.50;
     const tireLocalPositions = [
-      new THREE.Vector3(-0.85, -0.15, -1.0),  // rear-left
-      new THREE.Vector3(0.85, -0.15, -1.0),   // rear-right
-      new THREE.Vector3(-0.85, -0.15, 1.0),   // front-left
-      new THREE.Vector3(0.85, -0.15, 1.0),    // front-right
+      new THREE.Vector3(-trackX, tireY, rearZ),   // rear-left
+      new THREE.Vector3(trackX, tireY, rearZ),    // rear-right
+      new THREE.Vector3(-trackX, tireY, frontZ),  // front-left
+      new THREE.Vector3(trackX, tireY, frontZ),   // front-right
     ];
     const tp = tirePositionsRef.current;
     tp.rearLeft.copy(tireLocalPositions[0]).applyMatrix4(groupRef.current.matrixWorld);
@@ -335,91 +435,15 @@ function RetroCar({
       carXRef.current
     );
 
-    // Spin wheels proportional to actual forward speed
-    const wheelSpin = forwardSpeedRef.current * delta * 3;
-    // Rear wheels spin faster during drift (loss of traction)
-    const rearWheelSpin = wheelSpin * (1 + Math.abs(slipAngle.current) * 2);
-    for (let i = 0; i < wheelRefs.length; i++) {
-      const ref = wheelRefs[i];
-      if (!ref.current) continue;
-      // i=0,1 are front wheels; i=2,3 are rear wheels
-      ref.current.rotation.x -= i < 2 ? wheelSpin : rearWheelSpin;
-      // Front wheels turn visually
-      if (i < 2) {
-        ref.current.rotation.y = frontWheelYaw.current;
-      }
-    }
   });
-
-  const carBodyColor = useTerrainStore((s) => s.carBodyColor);
-  const carCabinColor = useTerrainStore((s) => s.carCabinColor);
-  const carMetalness = useTerrainStore((s) => s.carMetalness);
-  const carRoughness = useTerrainStore((s) => s.carRoughness);
-  const carWheelColor = useTerrainStore((s) => s.carWheelColor);
-  const carHeadlightColor = useTerrainStore((s) => s.carHeadlightColor);
-  const carTaillightColor = useTerrainStore((s) => s.carTaillightColor);
 
   return (
     <group ref={groupRef}>
-      {/* Body */}
-      <mesh position={[0, 0, 0]}>
-        <boxGeometry args={[1.6, 0.4, 3.2]} />
-        <meshStandardMaterial color={carBodyColor} metalness={carMetalness} roughness={carRoughness} />
-      </mesh>
-
-      {/* Cabin / roof */}
-      <mesh position={[0, 0.35, -0.2]}>
-        <boxGeometry args={[1.2, 0.35, 1.6]} />
-        <meshStandardMaterial color={carCabinColor} metalness={Math.max(0, carMetalness - 0.1)} roughness={Math.min(1, carRoughness + 0.1)} />
-      </mesh>
-
-      {/* Wheels */}
-      {[
-        [-0.85, -0.15, 1.0],
-        [0.85, -0.15, 1.0],
-        [-0.85, -0.15, -1.0],
-        [0.85, -0.15, -1.0],
-      ].map((pos, i) => (
-        <mesh
-          key={i}
-          ref={wheelRefs[i]}
-          position={pos as [number, number, number]}
-          rotation={[0, 0, Math.PI / 2]}
-        >
-          <cylinderGeometry args={[0.2, 0.2, 0.15, 12]} />
-          <meshStandardMaterial color={carWheelColor} metalness={0.3} roughness={0.7} />
-        </mesh>
-      ))}
-
-      {/* Taillights */}
-      {[
-        [-0.6, 0.1, -1.62],
-        [0.6, 0.1, -1.62],
-      ].map((pos, i) => (
-        <mesh key={`tail-${i}`} position={pos as [number, number, number]}>
-          <boxGeometry args={[0.25, 0.12, 0.05]} />
-          <meshStandardMaterial
-            color={carTaillightColor}
-            emissive={carTaillightColor}
-            emissiveIntensity={2}
-          />
-        </mesh>
-      ))}
-
-      {/* Headlights */}
-      {[
-        [-0.55, 0.1, 1.62],
-        [0.55, 0.1, 1.62],
-      ].map((pos, i) => (
-        <mesh key={`head-${i}`} position={pos as [number, number, number]}>
-          <boxGeometry args={[0.2, 0.1, 0.05]} />
-          <meshStandardMaterial
-            color={carHeadlightColor}
-            emissive={carHeadlightColor}
-            emissiveIntensity={1.5}
-          />
-        </mesh>
-      ))}
+      <primitive
+        object={carModel}
+        scale={carScaleRef.current}
+        rotation={[0, Math.PI, 0]}
+      />
     </group>
   );
 }
@@ -675,27 +699,21 @@ function TronTrails({
   if (trailType === "double") {
     return (
       <>
-        {/* Rear tires — each gets two parallel ribbons */}
-        <TronTrailRibbon
-          tirePositionsRef={tirePositionsRef}
-          tireKey="rearLeft"
-          offset={new THREE.Vector3(doubleOffset, 0, 0)}
-        />
-        <TronTrailRibbon
-          tirePositionsRef={tirePositionsRef}
-          tireKey="rearLeft"
-          offset={new THREE.Vector3(-doubleOffset, 0, 0)}
-        />
-        <TronTrailRibbon
-          tirePositionsRef={tirePositionsRef}
-          tireKey="rearRight"
-          offset={new THREE.Vector3(doubleOffset, 0, 0)}
-        />
-        <TronTrailRibbon
-          tirePositionsRef={tirePositionsRef}
-          tireKey="rearRight"
-          offset={new THREE.Vector3(-doubleOffset, 0, 0)}
-        />
+        {/* Each tire gets two parallel ribbons */}
+        {(["rearLeft", "rearRight", "frontLeft", "frontRight"] as const).map((key) => (
+          <React.Fragment key={key}>
+            <TronTrailRibbon
+              tirePositionsRef={tirePositionsRef}
+              tireKey={key}
+              offset={new THREE.Vector3(doubleOffset, 0, 0)}
+            />
+            <TronTrailRibbon
+              tirePositionsRef={tirePositionsRef}
+              tireKey={key}
+              offset={new THREE.Vector3(-doubleOffset, 0, 0)}
+            />
+          </React.Fragment>
+        ))}
       </>
     );
   }
@@ -704,6 +722,8 @@ function TronTrails({
     <>
       <TronTrailRibbon tirePositionsRef={tirePositionsRef} tireKey="rearLeft" />
       <TronTrailRibbon tirePositionsRef={tirePositionsRef} tireKey="rearRight" />
+      <TronTrailRibbon tirePositionsRef={tirePositionsRef} tireKey="frontLeft" />
+      <TronTrailRibbon tirePositionsRef={tirePositionsRef} tireKey="frontRight" />
     </>
   );
 }
@@ -1117,6 +1137,8 @@ function Scene() {
     </>
   );
 }
+
+useGLTF.preload("/models/ford_gt_2005/scene.gltf");
 
 export function TerrainCanvas() {
   const farClip = useTerrainStore((s) => s.farClip);

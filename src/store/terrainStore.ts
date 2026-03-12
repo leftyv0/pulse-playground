@@ -80,14 +80,14 @@ export interface TerrainState {
   surgeDistance: number;
   surgeSmoothing: number;
 
-  // Car body appearance
-  carBodyColor: string;
-  carCabinColor: string;
-  carMetalness: number;
-  carRoughness: number;
-  carWheelColor: string;
-  carHeadlightColor: string;
-  carTaillightColor: string;
+  // Car material colors (label → hex)
+  carMaterialColors: Record<string, string>;
+  setCarMaterialColor: (label: string, color: string) => void;
+
+  // Car emissive settings (label → { color, intensity })
+  carEmissiveSettings: Record<string, { color: string; intensity: number }>;
+  setCarEmissiveColor: (label: string, color: string) => void;
+  setCarEmissiveIntensity: (label: string, intensity: number) => void;
 
   // Tron trails
   trailEnabled: boolean;
@@ -150,15 +150,6 @@ export interface TerrainState {
   setLateralRange: (v: number) => void;
   setSurgeDistance: (v: number) => void;
   setSurgeSmoothing: (v: number) => void;
-
-  // Car body setters
-  setCarBodyColor: (v: string) => void;
-  setCarCabinColor: (v: string) => void;
-  setCarMetalness: (v: number) => void;
-  setCarRoughness: (v: number) => void;
-  setCarWheelColor: (v: string) => void;
-  setCarHeadlightColor: (v: string) => void;
-  setCarTaillightColor: (v: string) => void;
 
   // Trail setters
   setTrailEnabled: (v: boolean) => void;
@@ -259,13 +250,34 @@ export const useTerrainStore = create<TerrainState>()(
       surgeDistance: 3.0,
       surgeSmoothing: 4.0,
 
-      carBodyColor: "#1a1a2e",
-      carCabinColor: "#16213e",
-      carMetalness: 0.6,
-      carRoughness: 0.3,
-      carWheelColor: "#333333",
-      carHeadlightColor: "#aaeeff",
-      carTaillightColor: "#ff2244",
+      carMaterialColors: {
+        "Body Paint": "#1a3a6e",
+        "Chassis": "#ffffff",
+        "Glass": "#606060",
+        "Grille": "#000000",
+        "Headlight Housing": "#ffffff",
+        "Headlight Refractor": "#ffffff",
+        "Rear Refractor": "#000000",
+        "Taillight Glass": "#cc0000",
+        "Indicator Glass": "#cc2600",
+        "Interior": "#ffffff",
+        "Screen": "#000000",
+        "Matte Black": "#000000",
+        "Glossy Black": "#000000",
+        "Chrome": "#cccccc",
+        "Badges": "#ffffff",
+        "Wheel Rims": "#ffffff",
+        "Tyres": "#ffffff",
+        "Brake Rotors": "#ffffff",
+      },
+
+      carEmissiveSettings: {
+        "Headlight Housing": { color: "#ffffee", intensity: 2.0 },
+        "Headlight Refractor": { color: "#ffffee", intensity: 1.5 },
+        "Taillight Glass": { color: "#ff1122", intensity: 2.0 },
+        "Indicator Glass": { color: "#ff6600", intensity: 1.5 },
+        "Rear Refractor": { color: "#ff1122", intensity: 1.0 },
+      },
 
       trailEnabled: true,
       trailColor: "#22d3ee",
@@ -332,13 +344,24 @@ export const useTerrainStore = create<TerrainState>()(
       setSurgeDistance: (v) => set({ surgeDistance: v }),
       setSurgeSmoothing: (v) => set({ surgeSmoothing: v }),
 
-      setCarBodyColor: (v) => set({ carBodyColor: v }),
-      setCarCabinColor: (v) => set({ carCabinColor: v }),
-      setCarMetalness: (v) => set({ carMetalness: v }),
-      setCarRoughness: (v) => set({ carRoughness: v }),
-      setCarWheelColor: (v) => set({ carWheelColor: v }),
-      setCarHeadlightColor: (v) => set({ carHeadlightColor: v }),
-      setCarTaillightColor: (v) => set({ carTaillightColor: v }),
+      setCarMaterialColor: (label, color) =>
+        set((s) => ({
+          carMaterialColors: { ...s.carMaterialColors, [label]: color },
+        })),
+      setCarEmissiveColor: (label, color) =>
+        set((s) => ({
+          carEmissiveSettings: {
+            ...s.carEmissiveSettings,
+            [label]: { ...s.carEmissiveSettings[label], color },
+          },
+        })),
+      setCarEmissiveIntensity: (label, intensity) =>
+        set((s) => ({
+          carEmissiveSettings: {
+            ...s.carEmissiveSettings,
+            [label]: { ...s.carEmissiveSettings[label], intensity },
+          },
+        })),
 
       setTrailEnabled: (v) => set({ trailEnabled: v }),
       setTrailColor: (v) => set({ trailColor: v }),
