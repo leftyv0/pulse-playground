@@ -11,11 +11,15 @@ uniform float uOpacity;
 uniform float uEmissiveBoost;
 
 varying float vLocalX;
+varying float vFalloff;
 
 void main() {
   // Circular point
   vec2 cxy = 2.0 * gl_PointCoord - 1.0;
   if (dot(cxy, cxy) > 1.0) discard;
+
+  // Discard fully faded points (distance fall-off)
+  if (vFalloff < 0.01) discard;
 
   float halfWidth = uRoadWidth * 0.5;
   float distFromCenter = abs(vLocalX);
@@ -41,6 +45,6 @@ void main() {
   float luminance = dot(color, vec3(0.299, 0.587, 0.114));
   color *= 1.0 + luminance * uEmissiveBoost;
 
-  gl_FragColor = vec4(color, uOpacity * totalMask);
+  gl_FragColor = vec4(color, uOpacity * totalMask * vFalloff);
 }
 `;

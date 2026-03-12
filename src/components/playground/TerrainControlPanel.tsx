@@ -252,15 +252,64 @@ export function TerrainControlPanel() {
             if (!skipSync.current) store.getState().setRoadPointSize(v);
           },
         },
-        "Road Density": {
-          value: store.getState().roadDensity,
-          min: 32,
-          max: 512,
-          step: 16,
-          onChange: (v: number) => {
-            if (!skipSync.current) store.getState().setRoadDensity(v);
+        Density: folder({
+          "Length Segments": {
+            value: store.getState().roadDensity,
+            min: 32,
+            max: 512,
+            step: 16,
+            onChange: (v: number) => {
+              if (!skipSync.current) store.getState().setRoadDensity(v);
+            },
           },
-        },
+          "Cross Segments": {
+            value: store.getState().roadCrossDensity,
+            min: 4,
+            max: 64,
+            step: 2,
+            onChange: (v: number) => {
+              if (!skipSync.current) store.getState().setRoadCrossDensity(v);
+            },
+          },
+        }, { collapsed: false }),
+        "Road Fall-off": folder({
+          "Road Falloff Start": {
+            value: store.getState().roadFalloffStart,
+            min: 0,
+            max: 1,
+            step: 0.01,
+            onChange: (v: number) => {
+              if (!skipSync.current) store.getState().setRoadFalloffStart(v);
+            },
+          },
+          "Road Falloff End": {
+            value: store.getState().roadFalloffEnd,
+            min: 0,
+            max: 1,
+            step: 0.01,
+            onChange: (v: number) => {
+              if (!skipSync.current) store.getState().setRoadFalloffEnd(v);
+            },
+          },
+          "Road Size Falloff": {
+            value: store.getState().roadPointSizeFalloff,
+            min: 0,
+            max: 1,
+            step: 0.01,
+            onChange: (v: number) => {
+              if (!skipSync.current) store.getState().setRoadPointSizeFalloff(v);
+            },
+          },
+          "Road Near Fade": {
+            value: store.getState().roadNearFade,
+            min: 0,
+            max: 0.5,
+            step: 0.01,
+            onChange: (v: number) => {
+              if (!skipSync.current) store.getState().setRoadNearFade(v);
+            },
+          },
+        }, { collapsed: false }),
       }),
       Footpaths: folder({
         "FP Enabled": {
@@ -654,7 +703,12 @@ export function TerrainControlPanel() {
       levaStore.setValueAtPath("Road.Curve Amplitude", state.roadCurveAmplitude, false);
       levaStore.setValueAtPath("Road.Curve Frequency", state.roadCurveFrequency, false);
       levaStore.setValueAtPath("Road.Road Point Size", state.roadPointSize, false);
-      levaStore.setValueAtPath("Road.Road Density", state.roadDensity, false);
+      levaStore.setValueAtPath("Road.Density.Length Segments", state.roadDensity, false);
+      levaStore.setValueAtPath("Road.Density.Cross Segments", state.roadCrossDensity, false);
+      levaStore.setValueAtPath("Road.Road Fall-off.Road Falloff Start", state.roadFalloffStart, false);
+      levaStore.setValueAtPath("Road.Road Fall-off.Road Falloff End", state.roadFalloffEnd, false);
+      levaStore.setValueAtPath("Road.Road Fall-off.Road Size Falloff", state.roadPointSizeFalloff, false);
+      levaStore.setValueAtPath("Road.Road Fall-off.Road Near Fade", state.roadNearFade, false);
       levaStore.setValueAtPath("Footpaths.FP Enabled", state.footpathEnabled, false);
       levaStore.setValueAtPath("Footpaths.FP Width", state.footpathWidth, false);
       levaStore.setValueAtPath("Footpaths.FP Gap", state.footpathGap, false);

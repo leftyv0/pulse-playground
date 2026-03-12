@@ -610,6 +610,7 @@ function RoadPoints({
   const materialRef = useRef<THREE.ShaderMaterial>(null);
   const pointsRef = useRef<THREE.Points>(null);
   const densityRef = useRef(200);
+  const crossDensityRef = useRef(8);
   const farClipRef = useRef(200);
   const widthRef = useRef(4.0);
   const fpWidthRef = useRef(0.8);
@@ -624,6 +625,10 @@ function RoadPoints({
       uRoadCurveAmplitude: { value: terrainState.roadCurveAmplitude },
       uRoadCurveFrequency: { value: terrainState.roadCurveFrequency },
       uPointSize: { value: terrainState.roadPointSize },
+      uFalloffStart: { value: terrainState.roadFalloffStart },
+      uFalloffEnd: { value: terrainState.roadFalloffEnd },
+      uPointSizeFalloff: { value: terrainState.roadPointSizeFalloff },
+      uNearFade: { value: terrainState.roadNearFade },
       uRoadColor: { value: hexToVec3(terrainState.roadColor) },
       uRoadWidth: { value: terrainState.roadWidth },
       uRoadEdgeSoftness: { value: terrainState.roadEdgeSoftness },
@@ -639,13 +644,12 @@ function RoadPoints({
 
   // Build road strip geometry: narrow plane covering road + footpaths
   const buildRoadGeometry = useCallback(
-    (density: number, far: number, roadW: number, fpGap: number, fpW: number) => {
+    (density: number, crossDensity: number, far: number, roadW: number, fpGap: number, fpW: number) => {
       const stripHalfWidth = roadW * 0.5 + fpGap + fpW + 0.5; // +0.5 for edge softness
       const stripWidth = stripHalfWidth * 2;
       const stripLength = far * 2;
-      // Scale segments proportionally: more along length, fewer across width
       const segZ = density;
-      const segX = Math.max(8, Math.ceil(density * stripWidth / stripLength));
+      const segX = crossDensity;
       const geo = new THREE.PlaneGeometry(stripWidth, stripLength, segX, segZ);
       geo.rotateX(-Math.PI / 2);
       return geo;
@@ -657,6 +661,7 @@ function RoadPoints({
     () =>
       buildRoadGeometry(
         terrainState.roadDensity,
+        terrainState.roadCrossDensity,
         terrainState.farClip,
         terrainState.roadWidth,
         terrainState.footpathGap,
@@ -665,6 +670,7 @@ function RoadPoints({
     [
       buildRoadGeometry,
       terrainState.roadDensity,
+      terrainState.roadCrossDensity,
       terrainState.farClip,
       terrainState.roadWidth,
       terrainState.footpathGap,
@@ -681,6 +687,10 @@ function RoadPoints({
     u.uRoadCurveAmplitude.value = t.roadCurveAmplitude;
     u.uRoadCurveFrequency.value = t.roadCurveFrequency;
     u.uPointSize.value = t.roadPointSize;
+    u.uFalloffStart.value = t.roadFalloffStart;
+    u.uFalloffEnd.value = t.roadFalloffEnd;
+    u.uPointSizeFalloff.value = t.roadPointSizeFalloff;
+    u.uNearFade.value = t.roadNearFade;
     u.uRoadColor.value.copy(hexToVec3(t.roadColor));
     u.uRoadWidth.value = t.roadWidth;
     u.uRoadEdgeSoftness.value = t.roadEdgeSoftness;
@@ -694,18 +704,21 @@ function RoadPoints({
     // Rebuild geometry if road shape or density changed
     if (
       t.roadDensity !== densityRef.current ||
+      t.roadCrossDensity !== crossDensityRef.current ||
       t.farClip !== farClipRef.current ||
       t.roadWidth !== widthRef.current ||
       t.footpathWidth !== fpWidthRef.current ||
       t.footpathGap !== fpGapRef.current
     ) {
       densityRef.current = t.roadDensity;
+      crossDensityRef.current = t.roadCrossDensity;
       farClipRef.current = t.farClip;
       widthRef.current = t.roadWidth;
       fpWidthRef.current = t.footpathWidth;
       fpGapRef.current = t.footpathGap;
       const newGeo = buildRoadGeometry(
         t.roadDensity,
+        t.roadCrossDensity,
         t.farClip,
         t.roadWidth,
         t.footpathGap,

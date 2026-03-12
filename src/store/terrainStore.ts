@@ -46,6 +46,11 @@ export interface TerrainState {
   roadCurveFrequency: number;
   roadPointSize: number;
   roadDensity: number;
+  roadCrossDensity: number;
+  roadFalloffStart: number;
+  roadFalloffEnd: number;
+  roadPointSizeFalloff: number;
+  roadNearFade: number;
 
   // Footpaths
   footpathEnabled: boolean;
@@ -99,6 +104,11 @@ export interface TerrainState {
   setRoadCurveFrequency: (v: number) => void;
   setRoadPointSize: (v: number) => void;
   setRoadDensity: (v: number) => void;
+  setRoadCrossDensity: (v: number) => void;
+  setRoadFalloffStart: (v: number) => void;
+  setRoadFalloffEnd: (v: number) => void;
+  setRoadPointSizeFalloff: (v: number) => void;
+  setRoadNearFade: (v: number) => void;
 
   // Steering setters
   setSteerSensitivity: (v: number) => void;
@@ -176,6 +186,11 @@ export const useTerrainStore = create<TerrainState>()(
       roadCurveFrequency: 0.01,
       roadPointSize: 0.5,
       roadDensity: 360,
+      roadCrossDensity: 8,
+      roadFalloffStart: 0.05,
+      roadFalloffEnd: 0.85,
+      roadPointSizeFalloff: 1.0,
+      roadNearFade: 0,
 
       footpathEnabled: true,
       footpathWidth: 1.8,
@@ -232,6 +247,11 @@ export const useTerrainStore = create<TerrainState>()(
       setRoadCurveFrequency: (v) => set({ roadCurveFrequency: v }),
       setRoadPointSize: (v) => set({ roadPointSize: v }),
       setRoadDensity: (v) => set({ roadDensity: v }),
+      setRoadCrossDensity: (v) => set({ roadCrossDensity: v }),
+      setRoadFalloffStart: (v) => set({ roadFalloffStart: v }),
+      setRoadFalloffEnd: (v) => set({ roadFalloffEnd: v }),
+      setRoadPointSizeFalloff: (v) => set({ roadPointSizeFalloff: v }),
+      setRoadNearFade: (v) => set({ roadNearFade: v }),
       setSteerSensitivity: (v) => set({ steerSensitivity: v }),
       setSteerReturnSpeed: (v) => set({ steerReturnSpeed: v }),
       setSteerMaxLateralOffset: (v) => set({ steerMaxLateralOffset: v }),
