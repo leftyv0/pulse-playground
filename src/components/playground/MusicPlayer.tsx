@@ -8,6 +8,7 @@ import { useTracks } from "@/hooks/useTracks";
 
 export function MusicPlayer() {
   const isPlaying = useAudioStore((s) => s.isPlaying);
+  const isLoading = useAudioStore((s) => s.isLoading);
   const currentTrack = useAudioStore((s) => s.currentTrack);
 
   const volume = usePlayerStore((s) => s.volume);
@@ -82,11 +83,16 @@ export function MusicPlayer() {
     const url = e.target.value;
     const track = tracks.find((t) => t.url === url);
     if (!track) return;
+    setCurrentTime(0);
+    setDuration(0);
     setSelectedTrack(url, track.name);
     audio.play(url, track.name);
   };
 
-  const handlePlayPause = () => {
+  const handlePlayPause = useCallback(() => {
+    const { isPlaying } = useAudioStore.getState();
+    const { selectedTrackUrl, selectedTrackName } = usePlayerStore.getState();
+    const currentTrack = useAudioStore.getState().currentTrack;
     if (isPlaying) {
       audio.pause();
     } else if (selectedTrackUrl) {
@@ -96,17 +102,32 @@ export function MusicPlayer() {
         audio.play(selectedTrackUrl, selectedTrackName);
       }
     }
-  };
+  }, [audio]);
+
+  // Global spacebar play/pause
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== "Space") return;
+      // Don't hijack typing in inputs, textareas, selects, or contenteditable
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if ((e.target as HTMLElement)?.isContentEditable) return;
+      e.preventDefault();
+      handlePlayPause();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [handlePlayPause]);
 
   // --- Playhead time tracking ---
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [isSeeking, setIsSeeking] = useState(false);
+  const isSeekingRef = useRef(false);
   const rafRef = useRef<number>(0);
 
   useEffect(() => {
     const tick = () => {
-      if (!isSeeking) {
+      if (!isSeekingRef.current) {
         setCurrentTime(audio.getCurrentTime());
         const d = audio.getDuration();
         if (d && isFinite(d)) setDuration(d);
@@ -115,7 +136,7 @@ export function MusicPlayer() {
     };
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [audio, isSeeking]);
+  }, [audio]);
 
   const formatTime = (t: number) => {
     if (!isFinite(t) || t < 0) return "0:00";
@@ -130,6 +151,9 @@ export function MusicPlayer() {
     const { selectedTrackUrl: url } = usePlayerStore.getState();
     const allTracks = tracksRef.current;
     if (allTracks.length === 0) return;
+
+    setCurrentTime(0);
+    setDuration(0);
 
     if (shuf) {
       const rand = allTracks[Math.floor(Math.random() * allTracks.length)];
@@ -147,6 +171,7 @@ export function MusicPlayer() {
   const skipPrevious = useCallback(() => {
     // If more than 3s in, restart current track; otherwise go to previous
     if (audio.getCurrentTime() > 3) {
+      setCurrentTime(0);
       audio.seek(0);
       return;
     }
@@ -155,6 +180,9 @@ export function MusicPlayer() {
     const { selectedTrackUrl: url } = usePlayerStore.getState();
     const allTracks = tracksRef.current;
     if (allTracks.length === 0) return;
+
+    setCurrentTime(0);
+    setDuration(0);
 
     if (shuf) {
       const rand = allTracks[Math.floor(Math.random() * allTracks.length)];
@@ -204,24 +232,30 @@ export function MusicPlayer() {
           <div
             className="shrink-0 w-10 h-10 rounded-xl flex items-center justify-center"
             style={{
-              background: isPlaying
+              background: isPlaying || isLoading
                 ? "linear-gradient(135deg, var(--color-accent), var(--color-primary))"
                 : "rgba(255,255,255,0.06)",
-              boxShadow: isPlaying ? "0 0 20px rgba(34, 211, 238, 0.2)" : "none",
+              boxShadow: isPlaying || isLoading ? "0 0 20px rgba(34, 211, 238, 0.2)" : "none",
               transition: "all 0.4s ease",
             }}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={isPlaying ? "#fff" : "rgba(255,255,255,0.3)"} strokeWidth="1.5">
-              <circle cx="12" cy="12" r="10" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
+            {isLoading ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="animate-spin">
+                <circle cx="12" cy="12" r="9" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeDasharray="40 20" />
+              </svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={isPlaying ? "#fff" : "rgba(255,255,255,0.3)"} strokeWidth="1.5">
+                <circle cx="12" cy="12" r="10" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            )}
           </div>
           <div className="flex flex-col min-w-0 flex-1">
             <span className="text-[10px] font-medium uppercase tracking-[0.1em] text-white/30">
-              {isPlaying ? "Now Playing" : "Paused"}
+              {isLoading ? "Loading" : isPlaying ? "Now Playing" : "Paused"}
             </span>
             <span className="text-sm text-white/90 font-medium truncate leading-snug">
-              {currentTrack ?? "No track selected"}
+              {currentTrack ?? selectedTrackName ?? "No track selected"}
             </span>
           </div>
         </div>
@@ -230,10 +264,10 @@ export function MusicPlayer() {
         <div className="px-5 pb-1">
           <div
             className="group relative w-full h-5 flex items-center cursor-pointer"
-            onMouseDown={() => setIsSeeking(true)}
-            onMouseUp={() => setIsSeeking(false)}
-            onTouchStart={() => setIsSeeking(true)}
-            onTouchEnd={() => setIsSeeking(false)}
+            onMouseDown={() => { isSeekingRef.current = true; }}
+            onMouseUp={() => { isSeekingRef.current = false; }}
+            onTouchStart={() => { isSeekingRef.current = true; }}
+            onTouchEnd={() => { isSeekingRef.current = false; }}
           >
             <input
               type="range"
@@ -253,7 +287,7 @@ export function MusicPlayer() {
             <div className="w-full h-[3px] rounded-full bg-white/[0.08] overflow-hidden group-hover:h-[5px] transition-all duration-200">
               {/* Progress fill */}
               <div
-                className="h-full rounded-full transition-[width] duration-100"
+                className="h-full rounded-full"
                 style={{
                   width: `${progress * 100}%`,
                   background: selectedTrackUrl
@@ -311,8 +345,8 @@ export function MusicPlayer() {
           {/* Play / Pause — prominent center button */}
           <button
             onClick={handlePlayPause}
-            disabled={!selectedTrackUrl}
-            className="mx-2 w-11 h-11 rounded-full flex items-center justify-center transition-all duration-300 disabled:opacity-20 disabled:cursor-not-allowed"
+            disabled={!selectedTrackUrl || isLoading}
+            className="relative mx-2 w-11 h-11 rounded-full flex items-center justify-center transition-all duration-300 disabled:cursor-not-allowed"
             style={{
               background: selectedTrackUrl
                 ? "linear-gradient(135deg, var(--color-accent), var(--color-primary))"
@@ -321,10 +355,15 @@ export function MusicPlayer() {
                 ? "0 0 24px rgba(34, 211, 238, 0.25), inset 0 1px 0 rgba(255,255,255,0.15)"
                 : "inset 0 1px 0 rgba(255,255,255,0.1)",
               color: selectedTrackUrl ? "#fff" : "rgba(255,255,255,0.3)",
+              opacity: !selectedTrackUrl ? 0.2 : 1,
             }}
-            title={isPlaying ? "Pause" : "Play"}
+            title={isLoading ? "Loading..." : isPlaying ? "Pause" : "Play"}
           >
-            {isPlaying ? (
+            {isLoading ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="animate-spin">
+                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeDasharray="40 20" />
+              </svg>
+            ) : isPlaying ? (
               <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                 <rect x="7" y="5" width="3.5" height="14" rx="1" />
                 <rect x="13.5" y="5" width="3.5" height="14" rx="1" />

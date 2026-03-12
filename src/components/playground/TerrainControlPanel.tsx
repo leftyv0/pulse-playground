@@ -2,7 +2,7 @@
 
 import { useRef, useEffect } from "react";
 import { useControls, folder, LevaPanel, useCreateStore } from "leva";
-import { useTerrainStore, type NoiseType } from "@/store/terrainStore";
+import { useTerrainStore, type NoiseType, type TrailType } from "@/store/terrainStore";
 
 const NOISE_OPTIONS = {
   Perlin: "perlin",
@@ -10,6 +10,13 @@ const NOISE_OPTIONS = {
   FBM: "fbm",
   Ridged: "ridged",
   Voronoi: "voronoi",
+} as const;
+
+const TRAIL_TYPE_OPTIONS = {
+  Solid: "solid",
+  Dashed: "dashed",
+  Pulse: "pulse",
+  Double: "double",
 } as const;
 
 const AUDIO_FEATURE_OPTIONS = {
@@ -380,6 +387,24 @@ export function TerrainControlPanel() {
             if (!skipSync.current) store.getState().setSteerMaxLateralOffset(v);
           },
         },
+        "Surge Distance": {
+          value: store.getState().surgeDistance,
+          min: 0,
+          max: 10,
+          step: 0.5,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setSurgeDistance(v);
+          },
+        },
+        "Surge Smoothing": {
+          value: store.getState().surgeSmoothing,
+          min: 1,
+          max: 12,
+          step: 0.5,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setSurgeSmoothing(v);
+          },
+        },
       }),
       Drift: folder({
         Enabled: {
@@ -440,6 +465,131 @@ export function TerrainControlPanel() {
           step: 0.1,
           onChange: (v: number) => {
             if (!skipSync.current) store.getState().setLateralRange(v);
+          },
+        },
+      }),
+      "Car Body": folder({
+        "Body Color": {
+          value: store.getState().carBodyColor,
+          onChange: (v: string) => {
+            if (!skipSync.current) store.getState().setCarBodyColor(v);
+          },
+        },
+        "Cabin Color": {
+          value: store.getState().carCabinColor,
+          onChange: (v: string) => {
+            if (!skipSync.current) store.getState().setCarCabinColor(v);
+          },
+        },
+        Metalness: {
+          value: store.getState().carMetalness,
+          min: 0,
+          max: 1,
+          step: 0.05,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setCarMetalness(v);
+          },
+        },
+        Roughness: {
+          value: store.getState().carRoughness,
+          min: 0,
+          max: 1,
+          step: 0.05,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setCarRoughness(v);
+          },
+        },
+        "Wheel Color": {
+          value: store.getState().carWheelColor,
+          onChange: (v: string) => {
+            if (!skipSync.current) store.getState().setCarWheelColor(v);
+          },
+        },
+        "Headlight Color": {
+          value: store.getState().carHeadlightColor,
+          onChange: (v: string) => {
+            if (!skipSync.current) store.getState().setCarHeadlightColor(v);
+          },
+        },
+        "Taillight Color": {
+          value: store.getState().carTaillightColor,
+          onChange: (v: string) => {
+            if (!skipSync.current) store.getState().setCarTaillightColor(v);
+          },
+        },
+      }),
+      "Tron Trails": folder({
+        "Trail Enabled": {
+          value: store.getState().trailEnabled,
+          onChange: (v: boolean) => {
+            if (!skipSync.current) store.getState().setTrailEnabled(v);
+          },
+        },
+        "Trail Color": {
+          value: store.getState().trailColor,
+          onChange: (v: string) => {
+            if (!skipSync.current) store.getState().setTrailColor(v);
+          },
+        },
+        "Trail Type": {
+          value: store.getState().trailType,
+          options: TRAIL_TYPE_OPTIONS,
+          onChange: (v: TrailType) => {
+            if (!skipSync.current) store.getState().setTrailType(v);
+          },
+        },
+        "Trail Width": {
+          value: store.getState().trailWidth,
+          min: 0.01,
+          max: 0.5,
+          step: 0.01,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setTrailWidth(v);
+          },
+        },
+        "Trail Length": {
+          value: store.getState().trailLength,
+          min: 10,
+          max: 500,
+          step: 10,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setTrailLength(v);
+          },
+        },
+        "Trail Opacity": {
+          value: store.getState().trailOpacity,
+          min: 0,
+          max: 1,
+          step: 0.05,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setTrailOpacity(v);
+          },
+        },
+        "Trail Glow": {
+          value: store.getState().trailGlow,
+          min: 0,
+          max: 10,
+          step: 0.5,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setTrailGlow(v);
+          },
+        },
+        "Fade Exponent": {
+          value: store.getState().trailFadeExponent,
+          min: 0.5,
+          max: 5,
+          step: 0.25,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setTrailFadeExponent(v);
+          },
+        },
+        "Idle Opacity": {
+          value: store.getState().trailIdleOpacity,
+          min: 0,
+          max: 1,
+          step: 0.05,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setTrailIdleOpacity(v);
           },
         },
       }),
@@ -717,6 +867,8 @@ export function TerrainControlPanel() {
       levaStore.setValueAtPath("Steering.Sensitivity", state.steerSensitivity, false);
       levaStore.setValueAtPath("Steering.Return Speed", state.steerReturnSpeed, false);
       levaStore.setValueAtPath("Steering.Max Lateral", state.steerMaxLateralOffset, false);
+      levaStore.setValueAtPath("Steering.Surge Distance", state.surgeDistance, false);
+      levaStore.setValueAtPath("Steering.Surge Smoothing", state.surgeSmoothing, false);
       levaStore.setValueAtPath("Drift.Enabled", state.driftEnabled, false);
       levaStore.setValueAtPath("Drift.Slide Amount", state.driftGripLoss, false);
       levaStore.setValueAtPath("Drift.Slip Speed", state.driftSlipRate, false);
@@ -724,6 +876,22 @@ export function TerrainControlPanel() {
       levaStore.setValueAtPath("Drift.Max Angle", state.driftMaxAngle, false);
       levaStore.setValueAtPath("Drift.Body Lean", state.driftLeanMultiplier, false);
       levaStore.setValueAtPath("Drift.Lateral Range", state.lateralRange, false);
+      levaStore.setValueAtPath("Car Body.Body Color", state.carBodyColor, false);
+      levaStore.setValueAtPath("Car Body.Cabin Color", state.carCabinColor, false);
+      levaStore.setValueAtPath("Car Body.Metalness", state.carMetalness, false);
+      levaStore.setValueAtPath("Car Body.Roughness", state.carRoughness, false);
+      levaStore.setValueAtPath("Car Body.Wheel Color", state.carWheelColor, false);
+      levaStore.setValueAtPath("Car Body.Headlight Color", state.carHeadlightColor, false);
+      levaStore.setValueAtPath("Car Body.Taillight Color", state.carTaillightColor, false);
+      levaStore.setValueAtPath("Tron Trails.Trail Enabled", state.trailEnabled, false);
+      levaStore.setValueAtPath("Tron Trails.Trail Color", state.trailColor, false);
+      levaStore.setValueAtPath("Tron Trails.Trail Type", state.trailType, false);
+      levaStore.setValueAtPath("Tron Trails.Trail Width", state.trailWidth, false);
+      levaStore.setValueAtPath("Tron Trails.Trail Length", state.trailLength, false);
+      levaStore.setValueAtPath("Tron Trails.Trail Opacity", state.trailOpacity, false);
+      levaStore.setValueAtPath("Tron Trails.Trail Glow", state.trailGlow, false);
+      levaStore.setValueAtPath("Tron Trails.Fade Exponent", state.trailFadeExponent, false);
+      levaStore.setValueAtPath("Tron Trails.Idle Opacity", state.trailIdleOpacity, false);
       levaStore.setValueAtPath("Camera.Height", state.cameraHeight, false);
       levaStore.setValueAtPath("Camera.Tilt", state.cameraTilt, false);
       levaStore.setValueAtPath("Camera.Fly Speed", state.flySpeed, false);

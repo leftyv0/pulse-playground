@@ -34,9 +34,11 @@ interface AudioStore {
 
   // --- track info ---
   currentTrack: string | null;
+  isLoading: boolean;
 
   // --- setters ---
   setIsPlaying: (playing: boolean) => void;
+  setIsLoading: (loading: boolean) => void;
   setFrequencyData: (data: Uint8Array) => void;
   setTimeData: (data: Uint8Array) => void;
   setBands: (bass: number, mid: number, treble: number) => void;
@@ -104,8 +106,10 @@ export const useAudioStore = create<AudioStore>((set) => ({
   amplitudeSpectrum: new Float32Array(0),
 
   currentTrack: null,
+  isLoading: false,
 
   setIsPlaying: (isPlaying) => set({ isPlaying }),
+  setIsLoading: (isLoading) => set({ isLoading }),
   setFrequencyData: (frequencyData) => set({ frequencyData }),
   setTimeData: (timeData) => set({ timeData }),
   setBands: (bass, mid, treble) => set({ bass, mid, treble }),

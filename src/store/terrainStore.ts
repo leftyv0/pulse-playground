@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 export type NoiseType = "perlin" | "simplex" | "fbm" | "ridged" | "voronoi";
+export type TrailType = "solid" | "dashed" | "pulse" | "double";
 
 export interface AudioMapping {
   feature: string;
@@ -75,6 +76,30 @@ export interface TerrainState {
   // Lateral range — how far the car travels when steering
   lateralRange: number;
 
+  // Surge — forward/back displacement from accel/decel
+  surgeDistance: number;
+  surgeSmoothing: number;
+
+  // Car body appearance
+  carBodyColor: string;
+  carCabinColor: string;
+  carMetalness: number;
+  carRoughness: number;
+  carWheelColor: string;
+  carHeadlightColor: string;
+  carTaillightColor: string;
+
+  // Tron trails
+  trailEnabled: boolean;
+  trailColor: string;
+  trailType: TrailType;
+  trailWidth: number;
+  trailLength: number;
+  trailOpacity: number;
+  trailGlow: number;
+  trailFadeExponent: number;
+  trailIdleOpacity: number;
+
   // Camera
   cameraHeight: number;
   cameraTilt: number;
@@ -123,6 +148,28 @@ export interface TerrainState {
   setDriftMaxAngle: (v: number) => void;
   setDriftLeanMultiplier: (v: number) => void;
   setLateralRange: (v: number) => void;
+  setSurgeDistance: (v: number) => void;
+  setSurgeSmoothing: (v: number) => void;
+
+  // Car body setters
+  setCarBodyColor: (v: string) => void;
+  setCarCabinColor: (v: string) => void;
+  setCarMetalness: (v: number) => void;
+  setCarRoughness: (v: number) => void;
+  setCarWheelColor: (v: string) => void;
+  setCarHeadlightColor: (v: string) => void;
+  setCarTaillightColor: (v: string) => void;
+
+  // Trail setters
+  setTrailEnabled: (v: boolean) => void;
+  setTrailColor: (v: string) => void;
+  setTrailType: (v: TrailType) => void;
+  setTrailWidth: (v: number) => void;
+  setTrailLength: (v: number) => void;
+  setTrailOpacity: (v: number) => void;
+  setTrailGlow: (v: number) => void;
+  setTrailFadeExponent: (v: number) => void;
+  setTrailIdleOpacity: (v: number) => void;
 
   // Footpath setters
   setFootpathEnabled: (v: boolean) => void;
@@ -209,6 +256,26 @@ export const useTerrainStore = create<TerrainState>()(
       driftMaxAngle: 0.5,
       driftLeanMultiplier: 0.5,
       lateralRange: 0.9,
+      surgeDistance: 3.0,
+      surgeSmoothing: 4.0,
+
+      carBodyColor: "#1a1a2e",
+      carCabinColor: "#16213e",
+      carMetalness: 0.6,
+      carRoughness: 0.3,
+      carWheelColor: "#333333",
+      carHeadlightColor: "#aaeeff",
+      carTaillightColor: "#ff2244",
+
+      trailEnabled: true,
+      trailColor: "#22d3ee",
+      trailType: "solid",
+      trailWidth: 0.06,
+      trailLength: 150,
+      trailOpacity: 0.9,
+      trailGlow: 3.0,
+      trailFadeExponent: 2.0,
+      trailIdleOpacity: 0.1,
 
       pointSize: 0.3,
       gridDensity: 640,
@@ -262,6 +329,26 @@ export const useTerrainStore = create<TerrainState>()(
       setDriftMaxAngle: (v) => set({ driftMaxAngle: v }),
       setDriftLeanMultiplier: (v) => set({ driftLeanMultiplier: v }),
       setLateralRange: (v) => set({ lateralRange: v }),
+      setSurgeDistance: (v) => set({ surgeDistance: v }),
+      setSurgeSmoothing: (v) => set({ surgeSmoothing: v }),
+
+      setCarBodyColor: (v) => set({ carBodyColor: v }),
+      setCarCabinColor: (v) => set({ carCabinColor: v }),
+      setCarMetalness: (v) => set({ carMetalness: v }),
+      setCarRoughness: (v) => set({ carRoughness: v }),
+      setCarWheelColor: (v) => set({ carWheelColor: v }),
+      setCarHeadlightColor: (v) => set({ carHeadlightColor: v }),
+      setCarTaillightColor: (v) => set({ carTaillightColor: v }),
+
+      setTrailEnabled: (v) => set({ trailEnabled: v }),
+      setTrailColor: (v) => set({ trailColor: v }),
+      setTrailType: (v) => set({ trailType: v as TrailType }),
+      setTrailWidth: (v) => set({ trailWidth: v }),
+      setTrailLength: (v) => set({ trailLength: v }),
+      setTrailOpacity: (v) => set({ trailOpacity: v }),
+      setTrailGlow: (v) => set({ trailGlow: v }),
+      setTrailFadeExponent: (v) => set({ trailFadeExponent: v }),
+      setTrailIdleOpacity: (v) => set({ trailIdleOpacity: v }),
 
       setFootpathEnabled: (v) => set({ footpathEnabled: v }),
       setFootpathWidth: (v) => set({ footpathWidth: v }),

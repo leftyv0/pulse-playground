@@ -3,7 +3,7 @@
 import { useRef, useMemo, useCallback, useEffect } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { useTerrainStore, type NoiseType } from "@/store/terrainStore";
+import { useTerrainStore, type NoiseType, type TrailType } from "@/store/terrainStore";
 import { useAudioStore } from "@/store/audioStore";
 import { useDrivingStore } from "@/store/drivingStore";
 import { buildVertexShader } from "@/shaders/terrainVertex";
@@ -51,21 +51,31 @@ function useKeyboard() {
 }
 
 /* ── Retro car with drift physics ──────────────────────────── */
+export interface TireWorldPositions {
+  rearLeft: THREE.Vector3;
+  rearRight: THREE.Vector3;
+  frontLeft: THREE.Vector3;
+  frontRight: THREE.Vector3;
+}
+
 function RetroCar({
   scrollZRef,
   carXRef,
   forwardSpeedRef,
   keysRef,
+  tirePositionsRef,
 }: {
   scrollZRef: React.MutableRefObject<number>;
   carXRef: React.MutableRefObject<number>;
   forwardSpeedRef: React.MutableRefObject<number>;
   keysRef: React.MutableRefObject<Record<string, boolean>>;
+  tirePositionsRef: React.MutableRefObject<TireWorldPositions>;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const swayAngle = useRef(0); // current Z-rotation (lean)
   const yawAngle = useRef(0); // current Y-rotation (steer direction)
   const pitchAngle = useRef(0); // X-rotation for accel/brake tilt
+  const surgeOffset = useRef(0); // forward/back displacement from accel/decel
 
   // Drift state
   const slipAngle = useRef(0); // current rear slip angle (-1..1, sign = direction)
@@ -193,12 +203,20 @@ function RetroCar({
     // Integrate velocity → position
     carXRef.current += lateralVelocity.current * delta;
 
-    // Spring return to center when no input and not drifting
-    if (input === 0 && !isDrifting) {
-      carXRef.current = THREE.MathUtils.lerp(carXRef.current, 0, 1 - Math.exp(-steerReturn * 0.5 * delta));
-      if (Math.abs(carXRef.current) < 0.01 && Math.abs(lateralVelocity.current) < 0.01) {
-        carXRef.current = 0;
-      }
+    // Smooth return to center when no input and not drifting
+    if (input === 0 && !isDrifting && Math.abs(carXRef.current) > 0.01) {
+      // Drive return through velocity so there's no pause — car immediately
+      // starts moving back at a speed proportional to the Return Speed control.
+      const returnForce = -Math.sign(carXRef.current) * steerReturn * 3.0;
+      lateralVelocity.current = THREE.MathUtils.lerp(
+        lateralVelocity.current,
+        returnForce,
+        1 - Math.exp(-steerReturn * 4.0 * delta)
+      );
+    } else if (input === 0 && !isDrifting) {
+      // Snap to center when close enough
+      carXRef.current = 0;
+      lateralVelocity.current = 0;
     }
 
     // Road boundary — progressive deceleration, no hard bounce
@@ -254,9 +272,21 @@ function RetroCar({
     const perpX = 1 / tangentLen; // perpendicular X component (normalized)
     const perpZ = -dxdz / tangentLen; // perpendicular Z component (normalized)
 
+    // ── Forward surge (car moves forward/back with accel/decel) ──
+    const maxSurge = t.surgeDistance;
+    const surgeSmoothing = t.surgeSmoothing;
+    // Normalize speed above cruise: 0 at cruise, 1 at max
+    const speedAboveCruise = (forwardSpeedRef.current - cruiseSpeed) / (maxForwardSpeed - cruiseSpeed);
+    const targetSurge = THREE.MathUtils.clamp(speedAboveCruise, 0, 1) * -maxSurge;
+    surgeOffset.current = THREE.MathUtils.lerp(
+      surgeOffset.current,
+      targetSurge,
+      1 - Math.exp(-surgeSmoothing * delta)
+    );
+
     // Car world position = road center + lateral offset along perpendicular
     const worldX = roadCenterX + carXRef.current * perpX;
-    const worldZ = scrollZRef.current + carXRef.current * perpZ;
+    const worldZ = scrollZRef.current + carXRef.current * perpZ + surgeOffset.current;
 
     // ── Body dynamics ───────────────────────────────────────
     // Lean based on lateral velocity (feels responsive) + drift amplification
@@ -284,6 +314,20 @@ function RetroCar({
     groupRef.current.position.set(worldX, 0.4, worldZ);
     groupRef.current.rotation.set(pitchAngle.current, roadYaw + yawAngle.current, swayAngle.current);
 
+    // Publish tire world positions for trail system
+    groupRef.current.updateMatrixWorld(true);
+    const tireLocalPositions = [
+      new THREE.Vector3(-0.85, -0.15, -1.0),  // rear-left
+      new THREE.Vector3(0.85, -0.15, -1.0),   // rear-right
+      new THREE.Vector3(-0.85, -0.15, 1.0),   // front-left
+      new THREE.Vector3(0.85, -0.15, 1.0),    // front-right
+    ];
+    const tp = tirePositionsRef.current;
+    tp.rearLeft.copy(tireLocalPositions[0]).applyMatrix4(groupRef.current.matrixWorld);
+    tp.rearRight.copy(tireLocalPositions[1]).applyMatrix4(groupRef.current.matrixWorld);
+    tp.frontLeft.copy(tireLocalPositions[2]).applyMatrix4(groupRef.current.matrixWorld);
+    tp.frontRight.copy(tireLocalPositions[3]).applyMatrix4(groupRef.current.matrixWorld);
+
     // Publish driving state for other systems (particles, etc.)
     useDrivingStore.getState().setDriving(
       forwardSpeedRef.current,
@@ -307,18 +351,26 @@ function RetroCar({
     }
   });
 
+  const carBodyColor = useTerrainStore((s) => s.carBodyColor);
+  const carCabinColor = useTerrainStore((s) => s.carCabinColor);
+  const carMetalness = useTerrainStore((s) => s.carMetalness);
+  const carRoughness = useTerrainStore((s) => s.carRoughness);
+  const carWheelColor = useTerrainStore((s) => s.carWheelColor);
+  const carHeadlightColor = useTerrainStore((s) => s.carHeadlightColor);
+  const carTaillightColor = useTerrainStore((s) => s.carTaillightColor);
+
   return (
     <group ref={groupRef}>
       {/* Body */}
       <mesh position={[0, 0, 0]}>
         <boxGeometry args={[1.6, 0.4, 3.2]} />
-        <meshStandardMaterial color="#1a1a2e" metalness={0.6} roughness={0.3} />
+        <meshStandardMaterial color={carBodyColor} metalness={carMetalness} roughness={carRoughness} />
       </mesh>
 
       {/* Cabin / roof */}
       <mesh position={[0, 0.35, -0.2]}>
         <boxGeometry args={[1.2, 0.35, 1.6]} />
-        <meshStandardMaterial color="#16213e" metalness={0.5} roughness={0.4} />
+        <meshStandardMaterial color={carCabinColor} metalness={Math.max(0, carMetalness - 0.1)} roughness={Math.min(1, carRoughness + 0.1)} />
       </mesh>
 
       {/* Wheels */}
@@ -335,7 +387,7 @@ function RetroCar({
           rotation={[0, 0, Math.PI / 2]}
         >
           <cylinderGeometry args={[0.2, 0.2, 0.15, 12]} />
-          <meshStandardMaterial color="#333" metalness={0.3} roughness={0.7} />
+          <meshStandardMaterial color={carWheelColor} metalness={0.3} roughness={0.7} />
         </mesh>
       ))}
 
@@ -347,8 +399,8 @@ function RetroCar({
         <mesh key={`tail-${i}`} position={pos as [number, number, number]}>
           <boxGeometry args={[0.25, 0.12, 0.05]} />
           <meshStandardMaterial
-            color="#ff2244"
-            emissive="#ff2244"
+            color={carTaillightColor}
+            emissive={carTaillightColor}
             emissiveIntensity={2}
           />
         </mesh>
@@ -362,13 +414,297 @@ function RetroCar({
         <mesh key={`head-${i}`} position={pos as [number, number, number]}>
           <boxGeometry args={[0.2, 0.1, 0.05]} />
           <meshStandardMaterial
-            color="#aaeeff"
-            emissive="#aaeeff"
+            color={carHeadlightColor}
+            emissive={carHeadlightColor}
             emissiveIntensity={1.5}
           />
         </mesh>
       ))}
     </group>
+  );
+}
+
+/* ── Tron-style tire trails ─────────────────────────────────── */
+
+const TRAIL_MAX_POINTS = 512;
+
+const trailVertexShader = /* glsl */ `
+  attribute float aAlpha;
+  attribute float aTrailIndex;
+  varying float vAlpha;
+  varying float vTrailIndex;
+
+  void main() {
+    vAlpha = aAlpha;
+    vTrailIndex = aTrailIndex;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const trailFragmentShader = /* glsl */ `
+  uniform vec3 uColor;
+  uniform float uOpacity;
+  uniform float uGlow;
+  uniform int uTrailType; // 0=solid, 1=dashed, 2=pulse, 3=double
+  uniform float uTime;
+  varying float vAlpha;
+  varying float vTrailIndex;
+
+  void main() {
+    float alpha = vAlpha;
+
+    // Trail type effects
+    if (uTrailType == 1) {
+      // Dashed: modulate by trail index
+      float dash = step(0.5, fract(vTrailIndex * 0.15));
+      alpha *= dash;
+    } else if (uTrailType == 2) {
+      // Pulse: sinusoidal brightness wave
+      float wave = 0.5 + 0.5 * sin(vTrailIndex * 0.3 - uTime * 4.0);
+      alpha *= 0.4 + 0.6 * wave;
+    }
+    // double type is handled by geometry (two narrower ribbons offset)
+
+    if (alpha < 0.001) discard;
+
+    // Emissive glow — boost color beyond 1.0 for bloom
+    vec3 col = uColor * (1.0 + uGlow);
+    gl_FragColor = vec4(col, alpha * uOpacity);
+  }
+`;
+
+function TronTrailRibbon({
+  tirePositionsRef,
+  tireKey,
+  offset,
+}: {
+  tirePositionsRef: React.MutableRefObject<TireWorldPositions>;
+  tireKey: "rearLeft" | "rearRight" | "frontLeft" | "frontRight";
+  offset?: THREE.Vector3; // for "double" type lateral offset
+}) {
+  const meshRef = useRef<THREE.Mesh>(null);
+  // Trail stored as a sequential array: index 0 = newest, index N = oldest
+  // Each entry stores the center position + perpendicular direction
+  const trailPointsRef = useRef<{ x: number; y: number; z: number; px: number; pz: number }[]>([]);
+  const lastPosRef = useRef(new THREE.Vector3());
+  const initializedRef = useRef(false);
+  const smoothedOpacityRef = useRef(1);
+
+  const geometry = useMemo(() => {
+    const geo = new THREE.BufferGeometry();
+    const positions = new Float32Array(TRAIL_MAX_POINTS * 2 * 3);
+    const alphas = new Float32Array(TRAIL_MAX_POINTS * 2);
+    const trailIndices = new Float32Array(TRAIL_MAX_POINTS * 2);
+    const indices: number[] = [];
+
+    for (let i = 0; i < TRAIL_MAX_POINTS - 1; i++) {
+      const a = i * 2;
+      const b = i * 2 + 1;
+      const c = (i + 1) * 2;
+      const d = (i + 1) * 2 + 1;
+      indices.push(a, c, b, b, c, d);
+    }
+
+    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute("aAlpha", new THREE.BufferAttribute(alphas, 1));
+    geo.setAttribute("aTrailIndex", new THREE.BufferAttribute(trailIndices, 1));
+    geo.setIndex(indices);
+    return geo;
+  }, []);
+
+  const uniforms = useMemo(
+    () => ({
+      uColor: { value: new THREE.Vector3(0.13, 0.83, 0.93) },
+      uOpacity: { value: 0.9 },
+      uGlow: { value: 3.0 },
+      uTrailType: { value: 0 },
+      uTime: { value: 0 },
+    }),
+    []
+  );
+
+  useFrame((_state, delta) => {
+    const st = useTerrainStore.getState();
+    if (!st.trailEnabled) {
+      if (trailPointsRef.current.length > 0) {
+        trailPointsRef.current = [];
+        const alphas = geometry.attributes.aAlpha.array as Float32Array;
+        alphas.fill(0);
+        geometry.attributes.aAlpha.needsUpdate = true;
+        initializedRef.current = false;
+      }
+      return;
+    }
+
+    // Lerp opacity based on acceleration state
+    // Cruise = 0.5 normalized; above that means actively accelerating
+    const spd = useDrivingStore.getState().speedNormalized;
+    const isAccelerating = spd > 0.52;
+    const targetOpacity = isAccelerating ? st.trailOpacity : st.trailIdleOpacity;
+    smoothedOpacityRef.current = THREE.MathUtils.lerp(
+      smoothedOpacityRef.current,
+      targetOpacity,
+      1 - Math.exp(-4 * delta)
+    );
+
+    // Update uniforms
+    const col = new THREE.Color(st.trailColor);
+    uniforms.uColor.value.set(col.r, col.g, col.b);
+    uniforms.uOpacity.value = smoothedOpacityRef.current;
+    uniforms.uGlow.value = st.trailGlow;
+    const typeMap: Record<TrailType, number> = { solid: 0, dashed: 1, pulse: 2, double: 3 };
+    uniforms.uTrailType.value = typeMap[st.trailType] ?? 0;
+    uniforms.uTime.value += delta;
+
+    const trailLen = Math.min(Math.round(st.trailLength), TRAIL_MAX_POINTS);
+    const width = st.trailWidth;
+    const fadeExp = st.trailFadeExponent;
+
+    // Get current tire world position
+    const tirePos = tirePositionsRef.current[tireKey].clone();
+    if (offset) tirePos.add(offset);
+
+    // Initialize on first frame
+    if (!initializedRef.current) {
+      lastPosRef.current.copy(tirePos);
+      initializedRef.current = true;
+      return;
+    }
+
+    // Direction of travel
+    const dir = new THREE.Vector3().subVectors(tirePos, lastPosRef.current);
+    const dist = dir.length();
+
+    // Only add a new point if we've moved enough
+    if (dist >= 0.05) {
+      dir.normalize();
+
+      // Perpendicular vector in XZ plane for ribbon width
+      const perp = new THREE.Vector3(-dir.z, 0, dir.x).normalize();
+
+      // Prepend new point (index 0 = newest)
+      trailPointsRef.current.unshift({
+        x: tirePos.x,
+        y: tirePos.y,
+        z: tirePos.z,
+        px: perp.x,
+        pz: perp.z,
+      });
+
+      // Trim to max trail length
+      if (trailPointsRef.current.length > trailLen) {
+        trailPointsRef.current.length = trailLen;
+      }
+
+      lastPosRef.current.copy(tirePos);
+    }
+
+    // Rebuild geometry buffers from trail points (sequential order)
+    const points = trailPointsRef.current;
+    const count = points.length;
+    const positions = geometry.attributes.position.array as Float32Array;
+    const alphas = geometry.attributes.aAlpha.array as Float32Array;
+    const tIdx = geometry.attributes.aTrailIndex.array as Float32Array;
+
+    for (let i = 0; i < TRAIL_MAX_POINTS; i++) {
+      if (i < count) {
+        const pt = points[i];
+        const age = count > 1 ? i / (count - 1) : 0;
+        const a = Math.pow(1 - age, fadeExp);
+
+        // Left edge
+        const li = i * 2 * 3;
+        positions[li] = pt.x + pt.px * width;
+        positions[li + 1] = pt.y;
+        positions[li + 2] = pt.z + pt.pz * width;
+
+        // Right edge
+        const ri = (i * 2 + 1) * 3;
+        positions[ri] = pt.x - pt.px * width;
+        positions[ri + 1] = pt.y;
+        positions[ri + 2] = pt.z - pt.pz * width;
+
+        alphas[i * 2] = a;
+        alphas[i * 2 + 1] = a;
+        tIdx[i * 2] = i;
+        tIdx[i * 2 + 1] = i;
+      } else {
+        // Zero out unused slots
+        const li = i * 2 * 3;
+        positions[li] = positions[li + 1] = positions[li + 2] = 0;
+        const ri = (i * 2 + 1) * 3;
+        positions[ri] = positions[ri + 1] = positions[ri + 2] = 0;
+        alphas[i * 2] = 0;
+        alphas[i * 2 + 1] = 0;
+        tIdx[i * 2] = 0;
+        tIdx[i * 2 + 1] = 0;
+      }
+    }
+
+    geometry.attributes.position.needsUpdate = true;
+    geometry.attributes.aAlpha.needsUpdate = true;
+    geometry.attributes.aTrailIndex.needsUpdate = true;
+  });
+
+  return (
+    <mesh ref={meshRef} geometry={geometry} frustumCulled={false}>
+      <shaderMaterial
+        vertexShader={trailVertexShader}
+        fragmentShader={trailFragmentShader}
+        uniforms={uniforms}
+        transparent
+        depthWrite={false}
+        side={THREE.DoubleSide}
+        blending={THREE.AdditiveBlending}
+      />
+    </mesh>
+  );
+}
+
+function TronTrails({
+  tirePositionsRef,
+}: {
+  tirePositionsRef: React.MutableRefObject<TireWorldPositions>;
+}) {
+  const trailType = useTerrainStore((s) => s.trailType);
+  const trailWidth = useTerrainStore((s) => s.trailWidth);
+
+  // For "double" type, offset each ribbon slightly to create parallel lines
+  const doubleOffset = trailWidth * 1.5;
+
+  if (trailType === "double") {
+    return (
+      <>
+        {/* Rear tires — each gets two parallel ribbons */}
+        <TronTrailRibbon
+          tirePositionsRef={tirePositionsRef}
+          tireKey="rearLeft"
+          offset={new THREE.Vector3(doubleOffset, 0, 0)}
+        />
+        <TronTrailRibbon
+          tirePositionsRef={tirePositionsRef}
+          tireKey="rearLeft"
+          offset={new THREE.Vector3(-doubleOffset, 0, 0)}
+        />
+        <TronTrailRibbon
+          tirePositionsRef={tirePositionsRef}
+          tireKey="rearRight"
+          offset={new THREE.Vector3(doubleOffset, 0, 0)}
+        />
+        <TronTrailRibbon
+          tirePositionsRef={tirePositionsRef}
+          tireKey="rearRight"
+          offset={new THREE.Vector3(-doubleOffset, 0, 0)}
+        />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <TronTrailRibbon tirePositionsRef={tirePositionsRef} tireKey="rearLeft" />
+      <TronTrailRibbon tirePositionsRef={tirePositionsRef} tireKey="rearRight" />
+    </>
   );
 }
 
@@ -752,6 +1088,12 @@ function Scene() {
   const initialCruise = useTerrainStore.getState().moveSpeed * 0.5;
   const forwardSpeedRef = useRef(initialCruise);
   const keysRef = useKeyboard();
+  const tirePositionsRef = useRef<TireWorldPositions>({
+    rearLeft: new THREE.Vector3(),
+    rearRight: new THREE.Vector3(),
+    frontLeft: new THREE.Vector3(),
+    frontRight: new THREE.Vector3(),
+  });
 
   return (
     <>
@@ -768,7 +1110,9 @@ function Scene() {
         carXRef={carXRef}
         forwardSpeedRef={forwardSpeedRef}
         keysRef={keysRef}
+        tirePositionsRef={tirePositionsRef}
       />
+      <TronTrails tirePositionsRef={tirePositionsRef} />
       <PostProcessingEffects />
     </>
   );

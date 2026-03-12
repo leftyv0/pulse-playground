@@ -18,6 +18,7 @@ export function useAudio() {
   const pendingOnEndedRef = useRef<(() => void) | null>(null);
 
   const setIsPlaying = useAudioStore((s) => s.setIsPlaying);
+  const setIsLoading = useAudioStore((s) => s.setIsLoading);
   const setCurrentTrack = useAudioStore((s) => s.setCurrentTrack);
   const setMeydaFeatures = useAudioStore((s) => s.setMeydaFeatures);
 
@@ -96,6 +97,9 @@ export function useAudio() {
 
   const play = useCallback(
     async (url: string, trackName: string) => {
+      setCurrentTrack(trackName);
+      setIsLoading(true);
+
       await ensureSetup();
 
       if (ctxRef.current?.state === "suspended") {
@@ -107,13 +111,17 @@ export function useAudio() {
       try {
         await audio.play();
       } catch (e) {
-        if (e instanceof DOMException && e.name === "AbortError") return;
+        if (e instanceof DOMException && e.name === "AbortError") {
+          setIsLoading(false);
+          return;
+        }
+        setIsLoading(false);
         throw e;
       }
+      setIsLoading(false);
       setIsPlaying(true);
-      setCurrentTrack(trackName);
     },
-    [ensureSetup, setIsPlaying, setCurrentTrack]
+    [ensureSetup, setIsPlaying, setIsLoading, setCurrentTrack]
   );
 
   const pause = useCallback(() => {
