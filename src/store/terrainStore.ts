@@ -6,42 +6,30 @@ import { persist } from "zustand/middleware";
 export type NoiseType = "perlin" | "simplex" | "fbm" | "ridged" | "voronoi";
 export type TrailType = "solid" | "dashed" | "pulse" | "double";
 
-export interface AudioMapping {
-  feature: string;
-  sensitivity: number;
-}
-
-export interface TerrainState {
-  // Noise
+/** All tunable values (no setters/functions) */
+export interface TerrainPreset {
   noiseType: NoiseType;
   amplitude: number;
   frequency: number;
   speed: number;
-
-  // FBM
   octaves: number;
   lacunarity: number;
   gain: number;
-
-  // Visual
   pointSize: number;
   gridDensity: number;
   colorLow: string;
   colorMid: string;
   colorHigh: string;
   opacity: number;
-
-  // Fall-off
   falloffStart: number;
   falloffEnd: number;
   pointSizeFalloff: number;
   nearFade: number;
   lateralFalloff: number;
-
-  // Road
   roadEnabled: boolean;
   roadWidth: number;
   roadEdgeSoftness: number;
+  roadTerrainFalloff: number;
   roadColor: string;
   roadCurveAmplitude: number;
   roadCurveFrequency: number;
@@ -52,44 +40,29 @@ export interface TerrainState {
   roadFalloffEnd: number;
   roadPointSizeFalloff: number;
   roadNearFade: number;
-
-  // Footpaths
   footpathEnabled: boolean;
   footpathWidth: number;
   footpathGap: number;
   footpathEdgeSoftness: number;
   footpathColor: string;
-
-  // Steering
   steerSensitivity: number;
   steerReturnSpeed: number;
   steerMaxLateralOffset: number;
-
-  // Drift
   driftEnabled: boolean;
   driftGripLoss: number;
   driftSlipRate: number;
   driftRecovery: number;
   driftMaxAngle: number;
   driftLeanMultiplier: number;
-
-  // Lateral range — how far the car travels when steering
+  bodyLeanMax: number;
+  bodyYawMax: number;
+  bodyLeanSmoothing: number;
+  bodyLeanReturnSmoothing: number;
   lateralRange: number;
-
-  // Surge — forward/back displacement from accel/decel
   surgeDistance: number;
   surgeSmoothing: number;
-
-  // Car material colors (label → hex)
   carMaterialColors: Record<string, string>;
-  setCarMaterialColor: (label: string, color: string) => void;
-
-  // Car emissive settings (label → { color, intensity })
   carEmissiveSettings: Record<string, { color: string; intensity: number }>;
-  setCarEmissiveColor: (label: string, color: string) => void;
-  setCarEmissiveIntensity: (label: string, intensity: number) => void;
-
-  // Tron trails
   trailEnabled: boolean;
   trailColor: string;
   trailType: TrailType;
@@ -99,31 +72,166 @@ export interface TerrainState {
   trailGlow: number;
   trailFadeExponent: number;
   trailIdleOpacity: number;
-
-  // Camera
+  trailFrontEnabled: boolean;
+  trailFrontColor: string;
+  trailFrontWidth: number;
+  trailFrontOpacity: number;
+  trailFrontGlow: number;
+  trailFrontFadeExponent: number;
+  trailFrontLength: number;
+  trailHeightOffset: number;
   cameraHeight: number;
   cameraTilt: number;
   flySpeed: number;
   moveSpeed: number;
   farClip: number;
-
-  // Dynamic camera (acceleration-driven)
   dynTiltStrength: number;
   dynHeightStrength: number;
   dynZStrength: number;
   dynSmoothing: number;
+}
 
-  // Audio mappings
-  audioAmplitude: AudioMapping;
-  audioFrequency: AudioMapping;
-  audioSpeed: AudioMapping;
-  audioColor: AudioMapping;
-  audioOctaves: AudioMapping;
+export const DEFAULT_PRESET: TerrainPreset = {
+  noiseType: "fbm",
+  amplitude: 7.2,
+  frequency: 0.01,
+  speed: 2.0,
+  octaves: 5,
+  lacunarity: 4.0,
+  gain: 0.34,
+  pointSize: 0.5,
+  gridDensity: 640,
+  falloffStart: 0.05,
+  falloffEnd: 0.5,
+  pointSizeFalloff: 1.0,
+  nearFade: 0,
+  lateralFalloff: 1.55,
+  colorLow: "#00ffd0",
+  colorMid: "#00a2ff",
+  colorHigh: "#b70190",
+  opacity: 1.0,
+  roadEnabled: true,
+  roadWidth: 10,
+  roadEdgeSoftness: 0,
+  roadTerrainFalloff: 20,
+  roadColor: "#585858",
+  roadCurveAmplitude: 6.5,
+  roadCurveFrequency: 0.01,
+  roadPointSize: 0.5,
+  roadDensity: 512,
+  roadCrossDensity: 24,
+  roadFalloffStart: 0,
+  roadFalloffEnd: 0.5,
+  roadPointSizeFalloff: 1.0,
+  roadNearFade: 0,
+  footpathEnabled: true,
+  footpathWidth: 1.8,
+  footpathGap: 0,
+  footpathEdgeSoftness: 0,
+  footpathColor: "#ffffff",
+  steerSensitivity: 6.0,
+  steerReturnSpeed: 0.3,
+  steerMaxLateralOffset: 4.4,
+  driftEnabled: true,
+  driftGripLoss: 0.5,
+  driftSlipRate: 1.5,
+  driftRecovery: 3,
+  driftMaxAngle: 0.2,
+  driftLeanMultiplier: 1.0,
+  bodyLeanMax: 0.03,
+  bodyYawMax: 0.04,
+  bodyLeanSmoothing: 8,
+  bodyLeanReturnSmoothing: 6,
+  lateralRange: 0.5,
+  surgeDistance: 7.0,
+  surgeSmoothing: 3.0,
+  carMaterialColors: {
+    "Body Paint": "#383838",
+    "Chassis": "#ffffff",
+    "Glass": "#ffffff",
+    "Grille": "#ffffff",
+    "Headlight Housing": "#ffffff",
+    "Headlight Refractor": "#ffffff",
+    "Rear Refractor": "#ffffff",
+    "Taillight Glass": "#ffffff",
+    "Indicator Glass": "#ffffff",
+    "Interior": "#ffffff",
+    "Screen": "#ffffff",
+    "Matte Black": "#808080",
+    "Glossy Black": "#ffffff",
+    "Chrome": "#ffffff",
+    "Badges": "#ffffff",
+    "Wheel Rims": "#ffffff",
+    "Tyres": "#d8cfcf",
+    "Brake Rotors": "#ffffff",
+  },
+  carEmissiveSettings: {
+    "Headlight Housing": { color: "#ffffee", intensity: 2.0 },
+    "Headlight Refractor": { color: "#ffffee", intensity: 1.5 },
+    "Taillight Glass": { color: "#ff6434", intensity: 10.0 },
+    "Indicator Glass": { color: "#ffffff", intensity: 10.0 },
+    "Rear Refractor": { color: "#ff1122", intensity: 1.0 },
+  },
+  trailEnabled: true,
+  trailColor: "#ff6434",
+  trailType: "double",
+  trailWidth: 0.03,
+  trailLength: 130,
+  trailOpacity: 1.0,
+  trailGlow: 2.0,
+  trailFadeExponent: 5.0,
+  trailIdleOpacity: 0.02,
+  trailFrontEnabled: false,
+  trailFrontColor: "#ff6434",
+  trailFrontWidth: 0.05,
+  trailFrontOpacity: 1.0,
+  trailFrontGlow: 2.0,
+  trailFrontFadeExponent: 5.0,
+  trailFrontLength: 130,
+  trailHeightOffset: 0.01,
+  cameraHeight: 2.5,
+  cameraTilt: -0.2,
+  flySpeed: 4.5,
+  moveSpeed: 48.0,
+  farClip: 640,
+  dynTiltStrength: 1.7,
+  dynHeightStrength: 0,
+  dynZStrength: 0.9,
+  dynSmoothing: 4.0,
+};
+
+/** Keys of TerrainPreset — used to extract preset data from full state */
+const PRESET_KEYS = Object.keys(DEFAULT_PRESET) as (keyof TerrainPreset)[];
+
+export function extractPreset(state: TerrainState): TerrainPreset {
+  const preset = {} as Record<string, unknown>;
+  for (const key of PRESET_KEYS) {
+    const val = state[key];
+    // Deep-copy objects so presets are independent snapshots
+    preset[key] = val && typeof val === "object" ? JSON.parse(JSON.stringify(val)) : val;
+  }
+  return preset as unknown as TerrainPreset;
+}
+
+export interface TerrainState extends TerrainPreset {
+  // Preset management
+  presets: Record<string, TerrainPreset>;
+  activePreset: string;
+  savePreset: (name: string) => void;
+  loadPreset: (name: string) => void;
+  deletePreset: (name: string) => void;
+  resetToDefault: () => void;
+
+  // Car material/emissive setters
+  setCarMaterialColor: (label: string, color: string) => void;
+  setCarEmissiveColor: (label: string, color: string) => void;
+  setCarEmissiveIntensity: (label: string, intensity: number) => void;
 
   // Road setters
   setRoadEnabled: (v: boolean) => void;
   setRoadWidth: (v: number) => void;
   setRoadEdgeSoftness: (v: number) => void;
+  setRoadTerrainFalloff: (v: number) => void;
   setRoadColor: (v: string) => void;
   setRoadCurveAmplitude: (v: number) => void;
   setRoadCurveFrequency: (v: number) => void;
@@ -147,6 +255,10 @@ export interface TerrainState {
   setDriftRecovery: (v: number) => void;
   setDriftMaxAngle: (v: number) => void;
   setDriftLeanMultiplier: (v: number) => void;
+  setBodyLeanMax: (v: number) => void;
+  setBodyYawMax: (v: number) => void;
+  setBodyLeanSmoothing: (v: number) => void;
+  setBodyLeanReturnSmoothing: (v: number) => void;
   setLateralRange: (v: number) => void;
   setSurgeDistance: (v: number) => void;
   setSurgeSmoothing: (v: number) => void;
@@ -161,6 +273,16 @@ export interface TerrainState {
   setTrailGlow: (v: number) => void;
   setTrailFadeExponent: (v: number) => void;
   setTrailIdleOpacity: (v: number) => void;
+
+  // Front trail setters
+  setTrailFrontEnabled: (v: boolean) => void;
+  setTrailFrontColor: (v: string) => void;
+  setTrailFrontWidth: (v: number) => void;
+  setTrailFrontOpacity: (v: number) => void;
+  setTrailFrontGlow: (v: number) => void;
+  setTrailFrontFadeExponent: (v: number) => void;
+  setTrailFrontLength: (v: number) => void;
+  setTrailHeightOffset: (v: number) => void;
 
   // Footpath setters
   setFootpathEnabled: (v: boolean) => void;
@@ -197,130 +319,56 @@ export interface TerrainState {
   setDynHeightStrength: (v: number) => void;
   setDynZStrength: (v: number) => void;
   setDynSmoothing: (v: number) => void;
-  setAudioAmplitude: (v: AudioMapping) => void;
-  setAudioFrequency: (v: AudioMapping) => void;
-  setAudioSpeed: (v: AudioMapping) => void;
-  setAudioColor: (v: AudioMapping) => void;
-  setAudioOctaves: (v: AudioMapping) => void;
 }
 
 export const useTerrainStore = create<TerrainState>()(
   persist(
-    (set) => ({
-      noiseType: "fbm",
-      amplitude: 7.2,
-      frequency: 0.01,
-      speed: 2.0,
+    (set, get) => ({
+      ...JSON.parse(JSON.stringify(DEFAULT_PRESET)),
 
-      octaves: 5,
-      lacunarity: 4.0,
-      gain: 0.34,
+      // Preset management
+      presets: {} as Record<string, TerrainPreset>,
+      activePreset: "Default",
 
-      roadEnabled: true,
-      roadWidth: 10,
-      roadEdgeSoftness: 0,
-      roadColor: "#585858",
-      roadCurveAmplitude: 4.0,
-      roadCurveFrequency: 0.01,
-      roadPointSize: 0.5,
-      roadDensity: 512,
-      roadCrossDensity: 24,
-      roadFalloffStart: 0,
-      roadFalloffEnd: 0.5,
-      roadPointSizeFalloff: 1.0,
-      roadNearFade: 0,
-
-      footpathEnabled: true,
-      footpathWidth: 1.8,
-      footpathGap: 0,
-      footpathEdgeSoftness: 0,
-      footpathColor: "#ffffff",
-
-      steerSensitivity: 6.0,
-      steerReturnSpeed: 1.0,
-      steerMaxLateralOffset: 4.4,
-
-      driftEnabled: true,
-      driftGripLoss: 0.35,
-      driftSlipRate: 1.5,
-      driftRecovery: 3.75,
-      driftMaxAngle: 0.6,
-      driftLeanMultiplier: 1.0,
-      lateralRange: 0.8,
-      surgeDistance: 7.0,
-      surgeSmoothing: 3.0,
-
-      carMaterialColors: {
-        "Body Paint": "#383838",
-        "Chassis": "#ffffff",
-        "Glass": "#ffffff",
-        "Grille": "#ffffff",
-        "Headlight Housing": "#ffffff",
-        "Headlight Refractor": "#ffffff",
-        "Rear Refractor": "#ffffff",
-        "Taillight Glass": "#ffffff",
-        "Indicator Glass": "#ffffff",
-        "Interior": "#ffffff",
-        "Screen": "#ffffff",
-        "Matte Black": "#808080",
-        "Glossy Black": "#ffffff",
-        "Chrome": "#ffffff",
-        "Badges": "#ffffff",
-        "Wheel Rims": "#ffffff",
-        "Tyres": "#d8cfcf",
-        "Brake Rotors": "#ffffff",
+      savePreset: (name: string) => {
+        const preset = extractPreset(get());
+        set((s) => ({
+          presets: { ...s.presets, [name]: preset },
+          activePreset: name,
+        }));
       },
 
-      carEmissiveSettings: {
-        "Headlight Housing": { color: "#ffffee", intensity: 2.0 },
-        "Headlight Refractor": { color: "#ffffee", intensity: 1.5 },
-        "Taillight Glass": { color: "#ff6434", intensity: 10.0 },
-        "Indicator Glass": { color: "#ffffff", intensity: 10.0 },
-        "Rear Refractor": { color: "#ff1122", intensity: 1.0 },
+      loadPreset: (name: string) => {
+        if (name === "Default") {
+          get().resetToDefault();
+          return;
+        }
+        const preset = get().presets[name];
+        if (preset) {
+          set({ ...JSON.parse(JSON.stringify(preset)), activePreset: name });
+        }
       },
 
-      trailEnabled: true,
-      trailColor: "#ff6434",
-      trailType: "solid",
-      trailWidth: 0.05,
-      trailLength: 130,
-      trailOpacity: 1.0,
-      trailGlow: 2.0,
-      trailFadeExponent: 5.0,
-      trailIdleOpacity: 0.02,
+      deletePreset: (name: string) => {
+        if (name === "Default") return;
+        set((s) => {
+          const { [name]: _, ...rest } = s.presets;
+          return {
+            presets: rest,
+            activePreset: s.activePreset === name ? "Default" : s.activePreset,
+            ...(s.activePreset === name ? JSON.parse(JSON.stringify(DEFAULT_PRESET)) : {}),
+          };
+        });
+      },
 
-      pointSize: 0.5,
-      gridDensity: 640,
-      falloffStart: 0.05,
-      falloffEnd: 0.5,
-      pointSizeFalloff: 1.0,
-      nearFade: 0,
-      lateralFalloff: 1.55,
-      colorLow: "#00ffd0",
-      colorMid: "#00a2ff",
-      colorHigh: "#b70190",
-      opacity: 1.0,
-
-      cameraHeight: 3.5,
-      cameraTilt: -0.2,
-      flySpeed: 4.5,
-      moveSpeed: 48.0,
-      farClip: 640,
-
-      dynTiltStrength: 1.7,
-      dynHeightStrength: 0,
-      dynZStrength: 0.9,
-      dynSmoothing: 4.0,
-
-      audioAmplitude: { feature: "energy", sensitivity: 1.3 },
-      audioFrequency: { feature: "none", sensitivity: 0 },
-      audioSpeed: { feature: "none", sensitivity: 0 },
-      audioColor: { feature: "none", sensitivity: 0 },
-      audioOctaves: { feature: "none", sensitivity: 0 },
+      resetToDefault: () => {
+        set({ ...JSON.parse(JSON.stringify(DEFAULT_PRESET)), activePreset: "Default" });
+      },
 
       setRoadEnabled: (v) => set({ roadEnabled: v }),
       setRoadWidth: (v) => set({ roadWidth: v }),
       setRoadEdgeSoftness: (v) => set({ roadEdgeSoftness: v }),
+      setRoadTerrainFalloff: (v) => set({ roadTerrainFalloff: v }),
       setRoadColor: (v) => set({ roadColor: v }),
       setRoadCurveAmplitude: (v) => set({ roadCurveAmplitude: v }),
       setRoadCurveFrequency: (v) => set({ roadCurveFrequency: v }),
@@ -340,6 +388,10 @@ export const useTerrainStore = create<TerrainState>()(
       setDriftRecovery: (v) => set({ driftRecovery: v }),
       setDriftMaxAngle: (v) => set({ driftMaxAngle: v }),
       setDriftLeanMultiplier: (v) => set({ driftLeanMultiplier: v }),
+      setBodyLeanMax: (v) => set({ bodyLeanMax: v }),
+      setBodyYawMax: (v) => set({ bodyYawMax: v }),
+      setBodyLeanSmoothing: (v) => set({ bodyLeanSmoothing: v }),
+      setBodyLeanReturnSmoothing: (v) => set({ bodyLeanReturnSmoothing: v }),
       setLateralRange: (v) => set({ lateralRange: v }),
       setSurgeDistance: (v) => set({ surgeDistance: v }),
       setSurgeSmoothing: (v) => set({ surgeSmoothing: v }),
@@ -372,6 +424,15 @@ export const useTerrainStore = create<TerrainState>()(
       setTrailGlow: (v) => set({ trailGlow: v }),
       setTrailFadeExponent: (v) => set({ trailFadeExponent: v }),
       setTrailIdleOpacity: (v) => set({ trailIdleOpacity: v }),
+
+      setTrailFrontEnabled: (v) => set({ trailFrontEnabled: v }),
+      setTrailFrontColor: (v) => set({ trailFrontColor: v }),
+      setTrailFrontWidth: (v) => set({ trailFrontWidth: v }),
+      setTrailFrontOpacity: (v) => set({ trailFrontOpacity: v }),
+      setTrailFrontGlow: (v) => set({ trailFrontGlow: v }),
+      setTrailFrontFadeExponent: (v) => set({ trailFrontFadeExponent: v }),
+      setTrailFrontLength: (v) => set({ trailFrontLength: v }),
+      setTrailHeightOffset: (v) => set({ trailHeightOffset: v }),
 
       setFootpathEnabled: (v) => set({ footpathEnabled: v }),
       setFootpathWidth: (v) => set({ footpathWidth: v }),
@@ -406,11 +467,6 @@ export const useTerrainStore = create<TerrainState>()(
       setDynHeightStrength: (v) => set({ dynHeightStrength: v }),
       setDynZStrength: (v) => set({ dynZStrength: v }),
       setDynSmoothing: (v) => set({ dynSmoothing: v }),
-      setAudioAmplitude: (v) => set({ audioAmplitude: v }),
-      setAudioFrequency: (v) => set({ audioFrequency: v }),
-      setAudioSpeed: (v) => set({ audioSpeed: v }),
-      setAudioColor: (v) => set({ audioColor: v }),
-      setAudioOctaves: (v) => set({ audioOctaves: v }),
     }),
     { name: "pulse-terrain" }
   )

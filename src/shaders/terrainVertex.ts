@@ -26,6 +26,7 @@ uniform float uLateralFalloff;
 uniform float uRoadEnabled;
 uniform float uRoadWidth;
 uniform float uRoadEdgeSoftness;
+uniform float uRoadTerrainFalloff;
 uniform float uRoadCurveAmplitude;
 uniform float uRoadCurveFrequency;
 
@@ -59,6 +60,13 @@ void main() {
   float distFromCenter = abs(pos.x - roadCenterX);
   float roadFactor = 1.0 - smoothstep(halfWidth - uRoadEdgeSoftness, halfWidth, distFromCenter);
   roadFactor *= uRoadEnabled;
+
+  // Separate terrain height ramp: 0 at road edge → 1 at falloff distance
+  float terrainRamp = smoothstep(halfWidth, halfWidth + uRoadTerrainFalloff, distFromCenter);
+  terrainRamp = mix(1.0, terrainRamp, uRoadEnabled);
+
+  // Scale noise height by terrain ramp before flattening
+  h *= terrainRamp;
 
   // Footpaths: flat strips flanking the curved road
   float fpInner = halfWidth + uFootpathGap;

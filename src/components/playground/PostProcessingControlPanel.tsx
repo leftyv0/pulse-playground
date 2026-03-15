@@ -65,7 +65,7 @@ export function PostProcessingControlPanel() {
             if (!skipSync.current) usePostProcessingStore.getState().update({ bloomMipmapBlur: v });
           },
         },
-      }),
+      }, { collapsed: true }),
 
       // ── Brightness / Contrast ──────────────────────────────
       "Brightness / Contrast": folder(
@@ -163,7 +163,7 @@ export function PostProcessingControlPanel() {
             if (!skipSync.current) usePostProcessingStore.getState().update({ toneMappingMode: v });
           },
         },
-      }),
+      }, { collapsed: true }),
 
       // ── Chromatic Aberration ───────────────────────────────
       "Chromatic Aberration": folder(
@@ -234,7 +234,7 @@ export function PostProcessingControlPanel() {
             if (!skipSync.current) usePostProcessingStore.getState().update({ vignetteDarkness: v });
           },
         },
-      }),
+      }, { collapsed: true }),
 
       // ── Depth of Field ────────────────────────────────────
       "Depth of Field": folder(

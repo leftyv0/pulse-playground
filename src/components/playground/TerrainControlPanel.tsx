@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useEffect } from "react";
-import { useControls, folder, LevaPanel, useCreateStore } from "leva";
+import { useControls, folder, button, LevaPanel, useCreateStore } from "leva";
 import { useTerrainStore, type NoiseType, type TrailType } from "@/store/terrainStore";
 
 const NOISE_OPTIONS = {
@@ -19,37 +19,55 @@ const TRAIL_TYPE_OPTIONS = {
   Double: "double",
 } as const;
 
-const AUDIO_FEATURE_OPTIONS = {
-  None: "none",
-  Energy: "energy",
-  RMS: "rms",
-  Bass: "bass",
-  Mid: "mid",
-  Treble: "treble",
-  Volume: "volume",
-  "Spectral Centroid": "spectralCentroid",
-  "Spectral Flux": "spectralFlux",
-  "Spectral Flatness": "spectralFlatness",
-  "Perceptual Sharpness": "perceptualSharpness",
-  "Loudness Total": "loudnessTotal",
-  ZCR: "zcr",
-} as const;
-
 export function TerrainControlPanel() {
   const levaStore = useCreateStore();
   const skipSync = useRef(false);
   const store = useTerrainStore;
 
+  // Track preset names so dropdown re-renders when presets are added/deleted
+  const presetNames = useTerrainStore((s) => Object.keys(s.presets).sort().join(","));
+
   useControls(
-    () => ({
-      "Noise Type": {
-        value: store.getState().noiseType,
-        options: NOISE_OPTIONS,
-        onChange: (v: NoiseType) => {
-          if (!skipSync.current) store.getState().setNoiseType(v);
+    () => {
+      const userPresets = store.getState().presets;
+      const presetOptions: Record<string, string> = { Default: "Default" };
+      for (const name of Object.keys(userPresets)) {
+        presetOptions[name] = name;
+      }
+      return {
+      Presets: folder({
+        "Active Preset": {
+          value: store.getState().activePreset,
+          options: presetOptions,
+          onChange: (v: string) => {
+            if (!skipSync.current) store.getState().loadPreset(v);
+          },
         },
-      },
+        "Save As New Preset": button(() => {
+          const name = window.prompt("Preset name:");
+          if (name && name.trim()) {
+            store.getState().savePreset(name.trim());
+          }
+        }),
+        "Reset to Default": button(() => {
+          store.getState().resetToDefault();
+        }),
+        "Delete Active Preset": button(() => {
+          const active = store.getState().activePreset;
+          if (active === "Default") return;
+          if (window.confirm(`Delete preset "${active}"?`)) {
+            store.getState().deletePreset(active);
+          }
+        }),
+      }, { collapsed: true }),
       "Noise Params": folder({
+        "Noise Type": {
+          value: store.getState().noiseType,
+          options: NOISE_OPTIONS,
+          onChange: (v: NoiseType) => {
+            if (!skipSync.current) store.getState().setNoiseType(v);
+          },
+        },
         Amplitude: {
           value: store.getState().amplitude,
           min: 0,
@@ -77,7 +95,7 @@ export function TerrainControlPanel() {
             if (!skipSync.current) store.getState().setSpeed(v);
           },
         },
-      }),
+      }, { collapsed: true }),
       FBM: folder({
         Octaves: {
           value: store.getState().octaves,
@@ -106,7 +124,7 @@ export function TerrainControlPanel() {
             if (!skipSync.current) store.getState().setGain(v);
           },
         },
-      }),
+      }, { collapsed: true }),
       Visual: folder({
         "Point Size": {
           value: store.getState().pointSize,
@@ -172,7 +190,7 @@ export function TerrainControlPanel() {
               if (!skipSync.current) store.getState().setLateralFalloff(v);
             },
           },
-        }),
+        }, { collapsed: true }),
         "Color Low": {
           value: store.getState().colorLow,
           onChange: (v: string) => {
@@ -200,7 +218,7 @@ export function TerrainControlPanel() {
             if (!skipSync.current) store.getState().setOpacity(v);
           },
         },
-      }),
+      }, { collapsed: true }),
       Road: folder({
         Enabled: {
           value: store.getState().roadEnabled,
@@ -224,6 +242,15 @@ export function TerrainControlPanel() {
           step: 0.01,
           onChange: (v: number) => {
             if (!skipSync.current) store.getState().setRoadEdgeSoftness(v);
+          },
+        },
+        "Terrain Falloff": {
+          value: store.getState().roadTerrainFalloff,
+          min: 0,
+          max: 30,
+          step: 0.5,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setRoadTerrainFalloff(v);
           },
         },
         "Road Color": {
@@ -278,7 +305,7 @@ export function TerrainControlPanel() {
               if (!skipSync.current) store.getState().setRoadCrossDensity(v);
             },
           },
-        }, { collapsed: false }),
+        }, { collapsed: true }),
         "Road Fall-off": folder({
           "Road Falloff Start": {
             value: store.getState().roadFalloffStart,
@@ -316,8 +343,8 @@ export function TerrainControlPanel() {
               if (!skipSync.current) store.getState().setRoadNearFade(v);
             },
           },
-        }, { collapsed: false }),
-      }),
+        }, { collapsed: true }),
+      }, { collapsed: true }),
       Footpaths: folder({
         "FP Enabled": {
           value: store.getState().footpathEnabled,
@@ -358,7 +385,7 @@ export function TerrainControlPanel() {
             if (!skipSync.current) store.getState().setFootpathColor(v);
           },
         },
-      }),
+      }, { collapsed: true }),
       Steering: folder({
         Sensitivity: {
           value: store.getState().steerSensitivity,
@@ -405,9 +432,9 @@ export function TerrainControlPanel() {
             if (!skipSync.current) store.getState().setSurgeSmoothing(v);
           },
         },
-      }),
+      }, { collapsed: true }),
       Drift: folder({
-        Enabled: {
+        "Drift Enabled": {
           value: store.getState().driftEnabled,
           onChange: (v: boolean) => {
             if (!skipSync.current) store.getState().setDriftEnabled(v);
@@ -458,6 +485,42 @@ export function TerrainControlPanel() {
             if (!skipSync.current) store.getState().setDriftLeanMultiplier(v);
           },
         },
+        "Lean Max Angle": {
+          value: store.getState().bodyLeanMax,
+          min: 0.02,
+          max: 0.5,
+          step: 0.01,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setBodyLeanMax(v);
+          },
+        },
+        "Yaw Max Angle": {
+          value: store.getState().bodyYawMax,
+          min: 0.01,
+          max: 0.3,
+          step: 0.01,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setBodyYawMax(v);
+          },
+        },
+        "Lean Smoothing": {
+          value: store.getState().bodyLeanSmoothing,
+          min: 1,
+          max: 20,
+          step: 0.5,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setBodyLeanSmoothing(v);
+          },
+        },
+        "Lean Return": {
+          value: store.getState().bodyLeanReturnSmoothing,
+          min: 1,
+          max: 20,
+          step: 0.5,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setBodyLeanReturnSmoothing(v);
+          },
+        },
         "Lateral Range": {
           value: store.getState().lateralRange,
           min: 0.2,
@@ -467,7 +530,7 @@ export function TerrainControlPanel() {
             if (!skipSync.current) store.getState().setLateralRange(v);
           },
         },
-      }),
+      }, { collapsed: true }),
       "Car Colors": folder({
         "Body": folder({
           ...Object.fromEntries(
@@ -481,7 +544,7 @@ export function TerrainControlPanel() {
               },
             ])
           ),
-        }),
+        }, { collapsed: true }),
         "Glass": folder({
           ...Object.fromEntries(
             ["Glass"].map((k) => [
@@ -494,7 +557,7 @@ export function TerrainControlPanel() {
               },
             ])
           ),
-        }),
+        }, { collapsed: true }),
         "Lights": folder({
           ...Object.fromEntries(
             ["Headlight Housing", "Headlight Refractor", "Taillight Glass", "Indicator Glass", "Rear Refractor"].flatMap((k) => {
@@ -526,7 +589,7 @@ export function TerrainControlPanel() {
               ];
             })
           ),
-        }),
+        }, { collapsed: true }),
         "Wheels": folder({
           ...Object.fromEntries(
             ["Wheel Rims", "Tyres", "Brake Rotors"].map((k) => [
@@ -539,7 +602,7 @@ export function TerrainControlPanel() {
               },
             ])
           ),
-        }),
+        }, { collapsed: true }),
         "Trim": folder({
           ...Object.fromEntries(
             ["Chrome", "Badges", "Grille", "Matte Black", "Glossy Black"].map((k) => [
@@ -552,7 +615,7 @@ export function TerrainControlPanel() {
               },
             ])
           ),
-        }),
+        }, { collapsed: true }),
         "Interior": folder({
           ...Object.fromEntries(
             ["Interior", "Screen"].map((k) => [
@@ -565,8 +628,8 @@ export function TerrainControlPanel() {
               },
             ])
           ),
-        }),
-      }),
+        }, { collapsed: true }),
+      }, { collapsed: true }),
       "Tron Trails": folder({
         "Trail Enabled": {
           value: store.getState().trailEnabled,
@@ -641,7 +704,75 @@ export function TerrainControlPanel() {
             if (!skipSync.current) store.getState().setTrailIdleOpacity(v);
           },
         },
-      }),
+        "Height Offset": {
+          value: store.getState().trailHeightOffset,
+          min: -0.1,
+          max: 0.5,
+          step: 0.005,
+          onChange: (v: number) => {
+            if (!skipSync.current) store.getState().setTrailHeightOffset(v);
+          },
+        },
+        "Front Wheels": folder({
+          "Front Enabled": {
+            value: store.getState().trailFrontEnabled,
+            onChange: (v: boolean) => {
+              if (!skipSync.current) store.getState().setTrailFrontEnabled(v);
+            },
+          },
+          "Front Color": {
+            value: store.getState().trailFrontColor,
+            onChange: (v: string) => {
+              if (!skipSync.current) store.getState().setTrailFrontColor(v);
+            },
+          },
+          "Front Width": {
+            value: store.getState().trailFrontWidth,
+            min: 0.01,
+            max: 0.5,
+            step: 0.01,
+            onChange: (v: number) => {
+              if (!skipSync.current) store.getState().setTrailFrontWidth(v);
+            },
+          },
+          "Front Length": {
+            value: store.getState().trailFrontLength,
+            min: 10,
+            max: 500,
+            step: 10,
+            onChange: (v: number) => {
+              if (!skipSync.current) store.getState().setTrailFrontLength(v);
+            },
+          },
+          "Front Opacity": {
+            value: store.getState().trailFrontOpacity,
+            min: 0,
+            max: 1,
+            step: 0.05,
+            onChange: (v: number) => {
+              if (!skipSync.current) store.getState().setTrailFrontOpacity(v);
+            },
+          },
+          "Front Glow": {
+            value: store.getState().trailFrontGlow,
+            min: 0,
+            max: 10,
+            step: 0.5,
+            onChange: (v: number) => {
+              if (!skipSync.current) store.getState().setTrailFrontGlow(v);
+            },
+          },
+          "Front Fade Exp": {
+            value: store.getState().trailFrontFadeExponent,
+            min: 0.5,
+            max: 5,
+            step: 0.25,
+            onChange: (v: number) => {
+              if (!skipSync.current) store.getState().setTrailFrontFadeExponent(v);
+            },
+          },
+        }, { collapsed: true }),
+      }, { collapsed: true }),
       Camera: folder({
         Height: {
           value: store.getState().cameraHeight,
@@ -724,152 +855,10 @@ export function TerrainControlPanel() {
             if (!skipSync.current) store.getState().setDynSmoothing(v);
           },
         },
-      }),
-      "Audio Mapping": folder({
-        "Amp → Feature": {
-          value: store.getState().audioAmplitude.feature,
-          options: AUDIO_FEATURE_OPTIONS,
-          onChange: (v: string) => {
-            if (!skipSync.current)
-              store
-                .getState()
-                .setAudioAmplitude({
-                  ...store.getState().audioAmplitude,
-                  feature: v,
-                });
-          },
-        },
-        "Amp → Sensitivity": {
-          value: store.getState().audioAmplitude.sensitivity,
-          min: 0,
-          max: 20,
-          step: 0.1,
-          onChange: (v: number) => {
-            if (!skipSync.current)
-              store
-                .getState()
-                .setAudioAmplitude({
-                  ...store.getState().audioAmplitude,
-                  sensitivity: v,
-                });
-          },
-        },
-        "Freq → Feature": {
-          value: store.getState().audioFrequency.feature,
-          options: AUDIO_FEATURE_OPTIONS,
-          onChange: (v: string) => {
-            if (!skipSync.current)
-              store
-                .getState()
-                .setAudioFrequency({
-                  ...store.getState().audioFrequency,
-                  feature: v,
-                });
-          },
-        },
-        "Freq → Sensitivity": {
-          value: store.getState().audioFrequency.sensitivity,
-          min: 0,
-          max: 20,
-          step: 0.1,
-          onChange: (v: number) => {
-            if (!skipSync.current)
-              store
-                .getState()
-                .setAudioFrequency({
-                  ...store.getState().audioFrequency,
-                  sensitivity: v,
-                });
-          },
-        },
-        "Speed → Feature": {
-          value: store.getState().audioSpeed.feature,
-          options: AUDIO_FEATURE_OPTIONS,
-          onChange: (v: string) => {
-            if (!skipSync.current)
-              store
-                .getState()
-                .setAudioSpeed({
-                  ...store.getState().audioSpeed,
-                  feature: v,
-                });
-          },
-        },
-        "Speed → Sensitivity": {
-          value: store.getState().audioSpeed.sensitivity,
-          min: 0,
-          max: 20,
-          step: 0.1,
-          onChange: (v: number) => {
-            if (!skipSync.current)
-              store
-                .getState()
-                .setAudioSpeed({
-                  ...store.getState().audioSpeed,
-                  sensitivity: v,
-                });
-          },
-        },
-        "Color → Feature": {
-          value: store.getState().audioColor.feature,
-          options: AUDIO_FEATURE_OPTIONS,
-          onChange: (v: string) => {
-            if (!skipSync.current)
-              store
-                .getState()
-                .setAudioColor({
-                  ...store.getState().audioColor,
-                  feature: v,
-                });
-          },
-        },
-        "Color → Sensitivity": {
-          value: store.getState().audioColor.sensitivity,
-          min: 0,
-          max: 20,
-          step: 0.1,
-          onChange: (v: number) => {
-            if (!skipSync.current)
-              store
-                .getState()
-                .setAudioColor({
-                  ...store.getState().audioColor,
-                  sensitivity: v,
-                });
-          },
-        },
-        "Octaves → Feature": {
-          value: store.getState().audioOctaves.feature,
-          options: AUDIO_FEATURE_OPTIONS,
-          onChange: (v: string) => {
-            if (!skipSync.current)
-              store
-                .getState()
-                .setAudioOctaves({
-                  ...store.getState().audioOctaves,
-                  feature: v,
-                });
-          },
-        },
-        "Octaves → Sensitivity": {
-          value: store.getState().audioOctaves.sensitivity,
-          min: 0,
-          max: 20,
-          step: 0.1,
-          onChange: (v: number) => {
-            if (!skipSync.current)
-              store
-                .getState()
-                .setAudioOctaves({
-                  ...store.getState().audioOctaves,
-                  sensitivity: v,
-                });
-          },
-        },
-      }),
-    }),
+      }, { collapsed: true }),
+    }},
     { store: levaStore },
-    []
+    [presetNames]
   );
 
   // Sync Zustand → Leva
@@ -877,7 +866,8 @@ export function TerrainControlPanel() {
     return useTerrainStore.subscribe((state) => {
       skipSync.current = true;
       try {
-      levaStore.setValueAtPath("Noise Type", state.noiseType, false);
+      levaStore.setValueAtPath("Presets.Active Preset", state.activePreset, false);
+      levaStore.setValueAtPath("Noise Params.Noise Type", state.noiseType, false);
       levaStore.setValueAtPath("Noise Params.Amplitude", state.amplitude, false);
       levaStore.setValueAtPath("Noise Params.Frequency", state.frequency, false);
       levaStore.setValueAtPath("Noise Params.Speed", state.speed, false);
@@ -898,6 +888,7 @@ export function TerrainControlPanel() {
       levaStore.setValueAtPath("Road.Enabled", state.roadEnabled, false);
       levaStore.setValueAtPath("Road.Width", state.roadWidth, false);
       levaStore.setValueAtPath("Road.Edge Softness", state.roadEdgeSoftness, false);
+      levaStore.setValueAtPath("Road.Terrain Falloff", state.roadTerrainFalloff, false);
       levaStore.setValueAtPath("Road.Road Color", state.roadColor, false);
       levaStore.setValueAtPath("Road.Curve Amplitude", state.roadCurveAmplitude, false);
       levaStore.setValueAtPath("Road.Curve Frequency", state.roadCurveFrequency, false);
@@ -918,12 +909,16 @@ export function TerrainControlPanel() {
       levaStore.setValueAtPath("Steering.Max Lateral", state.steerMaxLateralOffset, false);
       levaStore.setValueAtPath("Steering.Surge Distance", state.surgeDistance, false);
       levaStore.setValueAtPath("Steering.Surge Smoothing", state.surgeSmoothing, false);
-      levaStore.setValueAtPath("Drift.Enabled", state.driftEnabled, false);
+      levaStore.setValueAtPath("Drift.Drift Enabled", state.driftEnabled, false);
       levaStore.setValueAtPath("Drift.Slide Amount", state.driftGripLoss, false);
       levaStore.setValueAtPath("Drift.Slip Speed", state.driftSlipRate, false);
       levaStore.setValueAtPath("Drift.Recovery", state.driftRecovery, false);
       levaStore.setValueAtPath("Drift.Max Angle", state.driftMaxAngle, false);
       levaStore.setValueAtPath("Drift.Body Lean", state.driftLeanMultiplier, false);
+      levaStore.setValueAtPath("Drift.Lean Max Angle", state.bodyLeanMax, false);
+      levaStore.setValueAtPath("Drift.Yaw Max Angle", state.bodyYawMax, false);
+      levaStore.setValueAtPath("Drift.Lean Smoothing", state.bodyLeanSmoothing, false);
+      levaStore.setValueAtPath("Drift.Lean Return", state.bodyLeanReturnSmoothing, false);
       levaStore.setValueAtPath("Drift.Lateral Range", state.lateralRange, false);
       // Sync car material colors
       const matColors = state.carMaterialColors;
@@ -956,6 +951,14 @@ export function TerrainControlPanel() {
       levaStore.setValueAtPath("Tron Trails.Trail Glow", state.trailGlow, false);
       levaStore.setValueAtPath("Tron Trails.Fade Exponent", state.trailFadeExponent, false);
       levaStore.setValueAtPath("Tron Trails.Idle Opacity", state.trailIdleOpacity, false);
+      levaStore.setValueAtPath("Tron Trails.Height Offset", state.trailHeightOffset, false);
+      levaStore.setValueAtPath("Tron Trails.Front Wheels.Front Enabled", state.trailFrontEnabled, false);
+      levaStore.setValueAtPath("Tron Trails.Front Wheels.Front Color", state.trailFrontColor, false);
+      levaStore.setValueAtPath("Tron Trails.Front Wheels.Front Width", state.trailFrontWidth, false);
+      levaStore.setValueAtPath("Tron Trails.Front Wheels.Front Length", state.trailFrontLength, false);
+      levaStore.setValueAtPath("Tron Trails.Front Wheels.Front Opacity", state.trailFrontOpacity, false);
+      levaStore.setValueAtPath("Tron Trails.Front Wheels.Front Glow", state.trailFrontGlow, false);
+      levaStore.setValueAtPath("Tron Trails.Front Wheels.Front Fade Exp", state.trailFrontFadeExponent, false);
       levaStore.setValueAtPath("Camera.Height", state.cameraHeight, false);
       levaStore.setValueAtPath("Camera.Tilt", state.cameraTilt, false);
       levaStore.setValueAtPath("Camera.Fly Speed", state.flySpeed, false);
@@ -965,16 +968,6 @@ export function TerrainControlPanel() {
       levaStore.setValueAtPath("Camera.Dyn Height", state.dynHeightStrength, false);
       levaStore.setValueAtPath("Camera.Dyn Z Pull", state.dynZStrength, false);
       levaStore.setValueAtPath("Camera.Dyn Smoothing", state.dynSmoothing, false);
-      levaStore.setValueAtPath("Audio Mapping.Amp → Feature", state.audioAmplitude.feature, false);
-      levaStore.setValueAtPath("Audio Mapping.Amp → Sensitivity", state.audioAmplitude.sensitivity, false);
-      levaStore.setValueAtPath("Audio Mapping.Freq → Feature", state.audioFrequency.feature, false);
-      levaStore.setValueAtPath("Audio Mapping.Freq → Sensitivity", state.audioFrequency.sensitivity, false);
-      levaStore.setValueAtPath("Audio Mapping.Speed → Feature", state.audioSpeed.feature, false);
-      levaStore.setValueAtPath("Audio Mapping.Speed → Sensitivity", state.audioSpeed.sensitivity, false);
-      levaStore.setValueAtPath("Audio Mapping.Color → Feature", state.audioColor.feature, false);
-      levaStore.setValueAtPath("Audio Mapping.Color → Sensitivity", state.audioColor.sensitivity, false);
-      levaStore.setValueAtPath("Audio Mapping.Octaves → Feature", state.audioOctaves.feature, false);
-      levaStore.setValueAtPath("Audio Mapping.Octaves → Sensitivity", state.audioOctaves.sensitivity, false);
       } catch { /* leva store not yet ready */ }
       skipSync.current = false;
     });

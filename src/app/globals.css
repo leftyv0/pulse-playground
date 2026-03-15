@@ -118,3 +118,8 @@ div[class*="leva"]::-webkit-scrollbar-thumb {
 div[class*="leva"]::-webkit-scrollbar-thumb:hover {
   background: rgba(99, 102, 241, 0.5);
 }
+
+/* Leva button text color */
+div[class*="leva"] button[class*="leva"] {
+  color: #000000 !important;
+}

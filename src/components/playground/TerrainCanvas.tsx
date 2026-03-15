@@ -5,7 +5,6 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { useGLTF } from "@react-three/drei";
 import { useTerrainStore, type NoiseType, type TrailType } from "@/store/terrainStore";
-import { useAudioStore } from "@/store/audioStore";
 import { useDrivingStore } from "@/store/drivingStore";
 import { buildVertexShader } from "@/shaders/terrainVertex";
 import { terrainFragmentShader } from "@/shaders/terrainFragment";
@@ -18,16 +17,6 @@ function hexToVec3(hex: string): THREE.Vector3 {
   return new THREE.Vector3(c.r, c.g, c.b);
 }
 
-
-function getAudioValue(feature: string): number {
-  if (feature === "none") return 0;
-  const s = useAudioStore.getState();
-  const v = (s as unknown as Record<string, unknown>)[feature];
-  if (typeof v !== "number" || !isFinite(v)) return 0;
-  // Normalize unbounded features (energy, spectralFlux, etc.) to 0..1 range
-  // to prevent extreme terrain distortion when music plays
-  return Math.min(v, 1);
-}
 
 /* ── Keyboard tracking ─────────────────────────────────────── */
 function useKeyboard() {
@@ -83,7 +72,7 @@ function RetroCar({
   const lateralVelocity = useRef(0); // actual lateral movement speed
 
   // Load GLB model
-  const { scene: carScene } = useGLTF("/models/ford_gt_2005/scene.gltf");
+  const { scene: carScene } = useGLTF("/models/car_model_01/scene.gltf");
 
   // Scaled model dimensions (set during useMemo)
   const modelDimsRef = useRef({ halfWidth: 0.85, halfLength: 1.6, bottom: -0.3 });
@@ -193,10 +182,10 @@ function RetroCar({
     if (!groupRef.current) return;
 
     const t = useTerrainStore.getState();
-    const maxLean = 0.18;
-    const maxYaw = 0.08;
-    const leanSmoothing = 8;
-    const returnSmoothing = 6;
+    const maxLean = t.bodyLeanMax;
+    const maxYaw = t.bodyYawMax;
+    const leanSmoothing = t.bodyLeanSmoothing;
+    const returnSmoothing = t.bodyLeanReturnSmoothing;
 
     // Steering params from store
     const steerSensitivity = t.steerSensitivity;
@@ -404,8 +393,9 @@ function RetroCar({
     yawAngle.current = THREE.MathUtils.lerp(yawAngle.current, targetYaw, lerpFactor);
     pitchAngle.current = THREE.MathUtils.lerp(pitchAngle.current, targetPitch, 1 - Math.exp(-6 * delta));
 
-    // Apply transform
-    groupRef.current.position.set(worldX, 0.4, worldZ);
+    // Apply transform – lift car to compensate for body roll so it doesn't clip below the road
+    const rollLift = modelDimsRef.current.halfWidth * Math.abs(Math.sin(swayAngle.current));
+    groupRef.current.position.set(worldX, 0.4 + rollLift, worldZ);
     groupRef.current.rotation.set(pitchAngle.current, roadYaw + yawAngle.current, swayAngle.current);
 
     // Publish tire world positions for trail system
@@ -501,10 +491,12 @@ function TronTrailRibbon({
   tirePositionsRef,
   tireKey,
   offset,
+  isFront,
 }: {
   tirePositionsRef: React.MutableRefObject<TireWorldPositions>;
   tireKey: "rearLeft" | "rearRight" | "frontLeft" | "frontRight";
   offset?: THREE.Vector3; // for "double" type lateral offset
+  isFront?: boolean;
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
   // Trail stored as a sequential array: index 0 = newest, index N = oldest
@@ -549,7 +541,9 @@ function TronTrailRibbon({
 
   useFrame((_state, delta) => {
     const st = useTerrainStore.getState();
-    if (!st.trailEnabled) {
+    // Check enabled: global trail + front-specific override
+    const enabled = isFront ? (st.trailEnabled && st.trailFrontEnabled) : st.trailEnabled;
+    if (!enabled) {
       if (trailPointsRef.current.length > 0) {
         trailPointsRef.current = [];
         const alphas = geometry.attributes.aAlpha.array as Float32Array;
@@ -560,11 +554,19 @@ function TronTrailRibbon({
       return;
     }
 
+    // Resolve front-specific overrides
+    const trailColor = isFront ? st.trailFrontColor : st.trailColor;
+    const trailOpacity = isFront ? st.trailFrontOpacity : st.trailOpacity;
+    const trailGlow = isFront ? st.trailFrontGlow : st.trailGlow;
+    const trailWidth = isFront ? st.trailFrontWidth : st.trailWidth;
+    const trailFadeExp = isFront ? st.trailFrontFadeExponent : st.trailFadeExponent;
+    const trailLength = isFront ? st.trailFrontLength : st.trailLength;
+
     // Lerp opacity based on acceleration state
     // Cruise = 0.5 normalized; above that means actively accelerating
     const spd = useDrivingStore.getState().speedNormalized;
     const isAccelerating = spd > 0.52;
-    const targetOpacity = isAccelerating ? st.trailOpacity : st.trailIdleOpacity;
+    const targetOpacity = isAccelerating ? trailOpacity : st.trailIdleOpacity;
     smoothedOpacityRef.current = THREE.MathUtils.lerp(
       smoothedOpacityRef.current,
       targetOpacity,
@@ -572,17 +574,17 @@ function TronTrailRibbon({
     );
 
     // Update uniforms
-    const col = new THREE.Color(st.trailColor);
+    const col = new THREE.Color(trailColor);
     uniforms.uColor.value.set(col.r, col.g, col.b);
     uniforms.uOpacity.value = smoothedOpacityRef.current;
-    uniforms.uGlow.value = st.trailGlow;
+    uniforms.uGlow.value = trailGlow;
     const typeMap: Record<TrailType, number> = { solid: 0, dashed: 1, pulse: 2, double: 3 };
     uniforms.uTrailType.value = typeMap[st.trailType] ?? 0;
     uniforms.uTime.value += delta;
 
-    const trailLen = Math.min(Math.round(st.trailLength), TRAIL_MAX_POINTS);
-    const width = st.trailWidth;
-    const fadeExp = st.trailFadeExponent;
+    const trailLen = Math.min(Math.round(trailLength), TRAIL_MAX_POINTS);
+    const width = trailWidth;
+    const fadeExp = trailFadeExp;
 
     // Get current tire world position
     const tirePos = tirePositionsRef.current[tireKey].clone();
@@ -609,7 +611,7 @@ function TronTrailRibbon({
       // Prepend new point (index 0 = newest)
       trailPointsRef.current.unshift({
         x: tirePos.x,
-        y: tirePos.y,
+        y: st.trailHeightOffset,
         z: tirePos.z,
         px: perp.x,
         pz: perp.z,
@@ -699,21 +701,25 @@ function TronTrails({
   if (trailType === "double") {
     return (
       <>
-        {/* Each tire gets two parallel ribbons */}
-        {(["rearLeft", "rearRight", "frontLeft", "frontRight"] as const).map((key) => (
-          <React.Fragment key={key}>
-            <TronTrailRibbon
-              tirePositionsRef={tirePositionsRef}
-              tireKey={key}
-              offset={new THREE.Vector3(doubleOffset, 0, 0)}
-            />
-            <TronTrailRibbon
-              tirePositionsRef={tirePositionsRef}
-              tireKey={key}
-              offset={new THREE.Vector3(-doubleOffset, 0, 0)}
-            />
-          </React.Fragment>
-        ))}
+        {(["rearLeft", "rearRight", "frontLeft", "frontRight"] as const).map((key) => {
+          const front = key === "frontLeft" || key === "frontRight";
+          return (
+            <React.Fragment key={key}>
+              <TronTrailRibbon
+                tirePositionsRef={tirePositionsRef}
+                tireKey={key}
+                offset={new THREE.Vector3(doubleOffset, 0, 0)}
+                isFront={front}
+              />
+              <TronTrailRibbon
+                tirePositionsRef={tirePositionsRef}
+                tireKey={key}
+                offset={new THREE.Vector3(-doubleOffset, 0, 0)}
+                isFront={front}
+              />
+            </React.Fragment>
+          );
+        })}
       </>
     );
   }
@@ -722,8 +728,8 @@ function TronTrails({
     <>
       <TronTrailRibbon tirePositionsRef={tirePositionsRef} tireKey="rearLeft" />
       <TronTrailRibbon tirePositionsRef={tirePositionsRef} tireKey="rearRight" />
-      <TronTrailRibbon tirePositionsRef={tirePositionsRef} tireKey="frontLeft" />
-      <TronTrailRibbon tirePositionsRef={tirePositionsRef} tireKey="frontRight" />
+      <TronTrailRibbon tirePositionsRef={tirePositionsRef} tireKey="frontLeft" isFront />
+      <TronTrailRibbon tirePositionsRef={tirePositionsRef} tireKey="frontRight" isFront />
     </>
   );
 }
@@ -764,6 +770,7 @@ function TerrainPoints({
       uRoadEnabled: { value: terrainState.roadEnabled ? 1.0 : 0.0 },
       uRoadWidth: { value: terrainState.roadWidth },
       uRoadEdgeSoftness: { value: terrainState.roadEdgeSoftness },
+      uRoadTerrainFalloff: { value: terrainState.roadTerrainFalloff },
       uRoadCurveAmplitude: { value: terrainState.roadCurveAmplitude },
       uRoadCurveFrequency: { value: terrainState.roadCurveFrequency },
       uFootpathEnabled: { value: terrainState.footpathEnabled ? 1.0 : 0.0 },
@@ -816,15 +823,9 @@ function TerrainPoints({
     u.uCameraZ.value = scrollZRef.current;
     u.uGridSize.value = t.farClip * 2;
 
-    // ── Audio mapping ───────────────────────────────────────
-    const ampAudio =
-      getAudioValue(t.audioAmplitude.feature) * t.audioAmplitude.sensitivity;
-    const freqAudio =
-      getAudioValue(t.audioFrequency.feature) * t.audioFrequency.sensitivity;
-
     // Update uniforms
-    u.uAmplitude.value = t.amplitude + ampAudio;
-    u.uFrequency.value = t.frequency + freqAudio * 0.1;
+    u.uAmplitude.value = t.amplitude;
+    u.uFrequency.value = t.frequency;
     u.uPointSize.value = t.pointSize;
     u.uOctaves.value = t.octaves;
     u.uLacunarity.value = t.lacunarity;
@@ -842,6 +843,7 @@ function TerrainPoints({
     u.uRoadEnabled.value = t.roadEnabled ? 1.0 : 0.0;
     u.uRoadWidth.value = t.roadWidth;
     u.uRoadEdgeSoftness.value = t.roadEdgeSoftness;
+    u.uRoadTerrainFalloff.value = t.roadTerrainFalloff;
     u.uRoadCurveAmplitude.value = t.roadCurveAmplitude;
     u.uRoadCurveFrequency.value = t.roadCurveFrequency;
 
@@ -851,17 +853,7 @@ function TerrainPoints({
     u.uFootpathGap.value = t.footpathGap;
     u.uFootpathEdgeSoftness.value = t.footpathEdgeSoftness;
 
-    // Color — shift toward high when audio color mapping active
-    const colorAudio =
-      getAudioValue(t.audioColor.feature) * t.audioColor.sensitivity;
-    if (colorAudio > 0.01) {
-      const base = hexToVec3(t.colorMid);
-      const high = hexToVec3(t.colorHigh);
-      const blend = Math.min(colorAudio, 1);
-      u.uColorMid.value.lerpVectors(base, high, blend);
-    } else {
-      u.uColorMid.value.copy(hexToVec3(t.colorMid));
-    }
+    u.uColorMid.value.copy(hexToVec3(t.colorMid));
     u.uColorLow.value.copy(hexToVec3(t.colorLow));
     u.uColorHigh.value.copy(hexToVec3(t.colorHigh));
 
@@ -1138,7 +1130,7 @@ function Scene() {
   );
 }
 
-useGLTF.preload("/models/ford_gt_2005/scene.gltf");
+useGLTF.preload("/models/car_model_01/scene.gltf");
 
 export function TerrainCanvas() {
   const farClip = useTerrainStore((s) => s.farClip);
