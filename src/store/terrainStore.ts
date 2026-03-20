@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { usePostProcessingStore } from "./postProcessingStore";
 
 export type NoiseType = "perlin" | "simplex" | "fbm" | "ridged" | "voronoi";
 export type TrailType = "solid" | "dashed" | "pulse" | "double";
@@ -89,6 +90,57 @@ export interface TerrainPreset {
   dynHeightStrength: number;
   dynZStrength: number;
   dynSmoothing: number;
+
+  // Post-processing
+  bloomAmount: number;
+  bloomIntensity: number;
+  bloomThreshold: number;
+  bloomSmoothing: number;
+  bloomLevels: number;
+  bloomMipmapBlur: boolean;
+  brightnessContrastAmount: number;
+  brightness: number;
+  contrast: number;
+  chromaticAberrationAmount: number;
+  chromaticAberrationOffset: number;
+  chromaticAberrationRadialModulation: boolean;
+  chromaticAberrationModulationOffset: number;
+  colorDepthAmount: number;
+  colorDepthBits: number;
+  depthOfFieldAmount: number;
+  dofFocusDistance: number;
+  dofFocalLength: number;
+  dofBokehScale: number;
+  dotScreenAmount: number;
+  dotScreenAngle: number;
+  dotScreenScale: number;
+  glitchAmount: number;
+  glitchStrengthMin: number;
+  glitchStrengthMax: number;
+  glitchDurationMin: number;
+  glitchDurationMax: number;
+  glitchDelayMin: number;
+  glitchDelayMax: number;
+  glitchRatio: number;
+  glitchMode: number;
+  hueSaturationAmount: number;
+  hue: number;
+  saturation: number;
+  noiseAmount: number;
+  noiseOpacity: number;
+  pixelationAmount: number;
+  pixelationGranularity: number;
+  scanlineAmount: number;
+  scanlineDensity: number;
+  scanlineOpacity: number;
+  sepiaAmount: number;
+  sepiaIntensity: number;
+  smaaAmount: number;
+  toneMappingAmount: number;
+  toneMappingMode: number;
+  vignetteAmount: number;
+  vignetteOffset: number;
+  vignetteDarkness: number;
 }
 
 export const DEFAULT_PRESET: TerrainPreset = {
@@ -198,10 +250,81 @@ export const DEFAULT_PRESET: TerrainPreset = {
   dynHeightStrength: 0,
   dynZStrength: 0.9,
   dynSmoothing: 4.0,
+
+  // Post-processing
+  bloomAmount: 0.52,
+  bloomIntensity: 7.3,
+  bloomThreshold: 0.1,
+  bloomSmoothing: 0.52,
+  bloomLevels: 9,
+  bloomMipmapBlur: true,
+  brightnessContrastAmount: 0.33,
+  brightness: 0.01,
+  contrast: 0.13,
+  chromaticAberrationAmount: 0,
+  chromaticAberrationOffset: 0.041,
+  chromaticAberrationRadialModulation: false,
+  chromaticAberrationModulationOffset: 0.66,
+  colorDepthAmount: 0,
+  colorDepthBits: 24,
+  depthOfFieldAmount: 0,
+  dofFocusDistance: 0.232,
+  dofFocalLength: 0.17,
+  dofBokehScale: 4.5,
+  dotScreenAmount: 0,
+  dotScreenAngle: 4.23,
+  dotScreenScale: 5,
+  glitchAmount: 0,
+  glitchStrengthMin: 0.1,
+  glitchStrengthMax: 0.3,
+  glitchDurationMin: 0.1,
+  glitchDurationMax: 0.3,
+  glitchDelayMin: 1.5,
+  glitchDelayMax: 3.5,
+  glitchRatio: 0.85,
+  glitchMode: 2,
+  hueSaturationAmount: 0,
+  hue: 0,
+  saturation: 0,
+  noiseAmount: 0,
+  noiseOpacity: 0.55,
+  pixelationAmount: 0,
+  pixelationGranularity: 100,
+  scanlineAmount: 0,
+  scanlineDensity: 0.9,
+  scanlineOpacity: 0.35,
+  sepiaAmount: 0,
+  sepiaIntensity: 0.5,
+  smaaAmount: 0,
+  toneMappingAmount: 1,
+  toneMappingMode: 4,
+  vignetteAmount: 1,
+  vignetteOffset: 0.31,
+  vignetteDarkness: 0.63,
 };
 
 /** Keys of TerrainPreset — used to extract preset data from full state */
 const PRESET_KEYS = Object.keys(DEFAULT_PRESET) as (keyof TerrainPreset)[];
+
+/** Post-processing keys within the preset */
+const PP_KEYS = [
+  "bloomAmount", "bloomIntensity", "bloomThreshold", "bloomSmoothing", "bloomLevels", "bloomMipmapBlur",
+  "brightnessContrastAmount", "brightness", "contrast",
+  "chromaticAberrationAmount", "chromaticAberrationOffset", "chromaticAberrationRadialModulation", "chromaticAberrationModulationOffset",
+  "colorDepthAmount", "colorDepthBits",
+  "depthOfFieldAmount", "dofFocusDistance", "dofFocalLength", "dofBokehScale",
+  "dotScreenAmount", "dotScreenAngle", "dotScreenScale",
+  "glitchAmount", "glitchStrengthMin", "glitchStrengthMax", "glitchDurationMin", "glitchDurationMax",
+  "glitchDelayMin", "glitchDelayMax", "glitchRatio", "glitchMode",
+  "hueSaturationAmount", "hue", "saturation",
+  "noiseAmount", "noiseOpacity",
+  "pixelationAmount", "pixelationGranularity",
+  "scanlineAmount", "scanlineDensity", "scanlineOpacity",
+  "sepiaAmount", "sepiaIntensity",
+  "smaaAmount",
+  "toneMappingAmount", "toneMappingMode",
+  "vignetteAmount", "vignetteOffset", "vignetteDarkness",
+] as const;
 
 export function extractPreset(state: TerrainState): TerrainPreset {
   const preset = {} as Record<string, unknown>;
@@ -331,6 +454,13 @@ export const useTerrainStore = create<TerrainState>()(
       activePreset: "Default",
 
       savePreset: (name: string) => {
+        // Capture post-processing state into terrain store before extracting
+        const ppState = usePostProcessingStore.getState();
+        const ppSnapshot: Partial<TerrainPreset> = {};
+        for (const key of PP_KEYS) {
+          (ppSnapshot as Record<string, unknown>)[key] = ppState[key as keyof typeof ppState];
+        }
+        set(ppSnapshot);
         const preset = extractPreset(get());
         set((s) => ({
           presets: { ...s.presets, [name]: preset },
@@ -345,7 +475,16 @@ export const useTerrainStore = create<TerrainState>()(
         }
         const preset = get().presets[name];
         if (preset) {
-          set({ ...JSON.parse(JSON.stringify(preset)), activePreset: name });
+          const parsed = JSON.parse(JSON.stringify(preset));
+          set({ ...parsed, activePreset: name });
+          // Sync post-processing values to pp store
+          const ppUpdate: Record<string, unknown> = {};
+          for (const key of PP_KEYS) {
+            if (key in parsed) ppUpdate[key] = parsed[key];
+          }
+          if (Object.keys(ppUpdate).length > 0) {
+            usePostProcessingStore.getState().update(ppUpdate);
+          }
         }
       },
 
@@ -353,16 +492,31 @@ export const useTerrainStore = create<TerrainState>()(
         if (name === "Default") return;
         set((s) => {
           const { [name]: _, ...rest } = s.presets;
+          const isActive = s.activePreset === name;
           return {
             presets: rest,
-            activePreset: s.activePreset === name ? "Default" : s.activePreset,
-            ...(s.activePreset === name ? JSON.parse(JSON.stringify(DEFAULT_PRESET)) : {}),
+            activePreset: isActive ? "Default" : s.activePreset,
+            ...(isActive ? JSON.parse(JSON.stringify(DEFAULT_PRESET)) : {}),
           };
         });
+        if (get().activePreset === "Default") {
+          // Also reset pp store to defaults
+          const ppDefaults: Record<string, unknown> = {};
+          for (const key of PP_KEYS) {
+            ppDefaults[key] = DEFAULT_PRESET[key as keyof TerrainPreset];
+          }
+          usePostProcessingStore.getState().update(ppDefaults);
+        }
       },
 
       resetToDefault: () => {
         set({ ...JSON.parse(JSON.stringify(DEFAULT_PRESET)), activePreset: "Default" });
+        // Also reset pp store to defaults
+        const ppDefaults: Record<string, unknown> = {};
+        for (const key of PP_KEYS) {
+          ppDefaults[key] = DEFAULT_PRESET[key as keyof TerrainPreset];
+        }
+        usePostProcessingStore.getState().update(ppDefaults);
       },
 
       setRoadEnabled: (v) => set({ roadEnabled: v }),
