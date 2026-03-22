@@ -3,6 +3,8 @@
 import { useRef, useEffect } from "react";
 import { useControls, folder, button, LevaPanel, useCreateStore } from "leva";
 import { useTerrainStore, type NoiseType, type TrailType } from "@/store/terrainStore";
+import { useControlTooltips, ControlTooltipPortal } from "./ControlTooltip";
+import { TERRAIN_TOOLTIPS, getTerrainValue } from "./terrainTooltips";
 
 const NOISE_OPTIONS = {
   Perlin: "perlin",
@@ -23,6 +25,8 @@ export function TerrainControlPanel() {
   const levaStore = useCreateStore();
   const skipSync = useRef(false);
   const store = useTerrainStore;
+  const panelRef = useRef<HTMLDivElement>(null);
+  const activeTooltip = useControlTooltips(panelRef, TERRAIN_TOOLTIPS);
 
   // Track preset names so dropdown re-renders when presets are added/deleted
   const presetNames = useTerrainStore((s) => Object.keys(s.presets).sort().join(","));
@@ -974,7 +978,7 @@ export function TerrainControlPanel() {
   }, [levaStore]);
 
   return (
-    <div className="leva-scrollable">
+    <div className="leva-scrollable" ref={panelRef}>
       <LevaPanel
         store={levaStore}
         flat={false}
@@ -996,6 +1000,7 @@ export function TerrainControlPanel() {
           sizes: { rootWidth: "260px", controlWidth: "130px" },
         }}
       />
+      {activeTooltip && <ControlTooltipPortal tooltip={activeTooltip} getValue={getTerrainValue} />}
     </div>
   );
 }

@@ -1,12 +1,17 @@
 "use client";
 
+import { useRef } from "react";
 import { useAudioStore } from "@/store/audioStore";
 import { Sparkline } from "./Sparkline";
 import { AudioHistogram } from "./AudioHistogram";
 import { useSparklineData } from "@/hooks/useSparklineData";
 import type { StatKey } from "@/lib/statsHistory";
+import { useControlTooltips, ControlTooltipPortal } from "./ControlTooltip";
+import { MEYDA_TOOLTIPS, getMeydaValue } from "./meydaTooltips";
 
 export function StatsPanel() {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const activeTooltip = useControlTooltips(panelRef, MEYDA_TOOLTIPS);
   const bass = useAudioStore((s) => s.bass);
   const mid = useAudioStore((s) => s.mid);
   const treble = useAudioStore((s) => s.treble);
@@ -68,7 +73,7 @@ export function StatsPanel() {
   ];
 
   return (
-    <div className="absolute left-4 top-1/2 -translate-y-1/2 z-10 pointer-events-auto">
+    <div className="absolute left-4 top-1/2 -translate-y-1/2 z-10 pointer-events-auto" ref={panelRef}>
       <div
         className="rounded-lg p-3 font-mono text-xs min-w-[260px] max-h-[80vh] overflow-y-auto"
         style={{
@@ -98,9 +103,9 @@ export function StatsPanel() {
             <div className="flex flex-col gap-1">
               {section.stats.map((stat) => (
                 <div key={stat.label} className="flex items-center justify-between gap-2">
-                  <span className="w-[60px] flex-shrink-0" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
+                  <label className="w-[60px] flex-shrink-0 cursor-help" style={{ color: "rgba(255, 255, 255, 0.5)" }}>
                     {stat.label}
-                  </span>
+                  </label>
                   {stat.key ? (
                     <Sparkline data={sparklines[stat.key]} color={stat.color} />
                   ) : (
@@ -115,6 +120,7 @@ export function StatsPanel() {
           </div>
         ))}
       </div>
+      {activeTooltip && <ControlTooltipPortal tooltip={activeTooltip} getValue={getMeydaValue} />}
     </div>
   );
 }

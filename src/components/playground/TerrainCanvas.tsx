@@ -6,9 +6,12 @@ import * as THREE from "three";
 import { useGLTF } from "@react-three/drei";
 import { useTerrainStore, type NoiseType, type TrailType } from "@/store/terrainStore";
 import { useDrivingStore } from "@/store/drivingStore";
+import { useAudioStore } from "@/store/audioStore";
+import { useShockWaveStore } from "@/store/shockWaveStore";
+import { getNormalizedAudioValue } from "@/lib/audioNormalizer";
 import { buildVertexShader } from "@/shaders/terrainVertex";
 import { terrainFragmentShader } from "@/shaders/terrainFragment";
-import { roadVertexShader } from "@/shaders/roadVertex";
+import { buildRoadVertexShader } from "@/shaders/roadVertex";
 import { roadFragmentShader } from "@/shaders/roadFragment";
 import { PostProcessingEffects } from "./PostProcessingEffects";
 
@@ -16,6 +19,44 @@ function hexToVec3(hex: string): THREE.Vector3 {
   const c = new THREE.Color(hex);
   return new THREE.Vector3(c.r, c.g, c.b);
 }
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyUniforms = Record<string, { value: any }>;
+
+const SLOTS_PER_CHANNEL = 8;
+
+function createWaveUniforms(): AnyUniforms {
+  const u: AnyUniforms = {};
+  const totalSlots = 3 * SLOTS_PER_CHANNEL;
+  // Per-slot displacement uniforms (flat index 0..totalSlots-1)
+  for (let i = 0; i < totalSlots; i++) {
+    u[`uWaveOrigin${i}`] = { value: new THREE.Vector3(0, 0, 0) };
+    u[`uWaveProgress${i}`] = { value: 0 };
+    u[`uWaveMaxRadius${i}`] = { value: 4.0 };
+    u[`uWaveRingWidth${i}`] = { value: 0.5 };
+    u[`uWaveWidthFade${i}`] = { value: 0.5 };
+    u[`uWaveHeight${i}`] = { value: 0 };
+    u[`uWaveActive${i}`] = { value: 0 };
+    u[`uWaveFadeExp${i}`] = { value: 2.0 };
+    u[`uWaveFadeStart${i}`] = { value: 0.0 };
+    u[`uWaveLifeFrac${i}`] = { value: 0 };
+    u[`uWaveRingShape${i}`] = { value: 0.7 };
+  }
+  // Per-channel color/emissive uniforms (0..2)
+  for (let i = 0; i < 3; i++) {
+    u[`uWaveColor${i}`] = { value: new THREE.Vector3(0, 0, 0) };
+    u[`uWaveEmissive${i}`] = { value: 0 };
+  }
+  return u;
+}
+
+interface WaveEntry {
+  progress: number;
+  age: number;
+  originX: number;
+  originZ: number;
+}
+
 
 
 /* ── Keyboard tracking ─────────────────────────────────────── */
@@ -54,18 +95,20 @@ function RetroCar({
   forwardSpeedRef,
   keysRef,
   tirePositionsRef,
+  surgeOffsetRef,
 }: {
   scrollZRef: React.MutableRefObject<number>;
   carXRef: React.MutableRefObject<number>;
   forwardSpeedRef: React.MutableRefObject<number>;
   keysRef: React.MutableRefObject<Record<string, boolean>>;
   tirePositionsRef: React.MutableRefObject<TireWorldPositions>;
+  surgeOffsetRef: React.MutableRefObject<number>;
 }) {
   const groupRef = useRef<THREE.Group>(null);
   const swayAngle = useRef(0); // current Z-rotation (lean)
   const yawAngle = useRef(0); // current Y-rotation (steer direction)
   const pitchAngle = useRef(0); // X-rotation for accel/brake tilt
-  const surgeOffset = useRef(0); // forward/back displacement from accel/decel
+  const surgeOffset = surgeOffsetRef; // shared ref for surge position
 
   // Drift state
   const slipAngle = useRef(0); // current rear slip angle (-1..1, sign = direction)
@@ -739,10 +782,12 @@ function TerrainPoints({
   scrollZRef,
   carXRef,
   forwardSpeedRef,
+  surgeOffsetRef,
 }: {
   scrollZRef: React.MutableRefObject<number>;
   carXRef: React.MutableRefObject<number>;
   forwardSpeedRef: React.MutableRefObject<number>;
+  surgeOffsetRef: React.MutableRefObject<number>;
 }) {
   const materialRef = useRef<THREE.ShaderMaterial>(null);
   const noiseTypeRef = useRef<NoiseType>("fbm");
@@ -785,10 +830,14 @@ function TerrainPoints({
       uNearFade: { value: terrainState.nearFade },
       uLateralFalloff: { value: terrainState.lateralFalloff },
       uEmissiveBoost: { value: 1.5 },
+      ...createWaveUniforms(),
     }))()
   );
 
-  const vertexShaderRef = useRef(buildVertexShader(terrainState.noiseType));
+  // Shock wave runtime state: dynamic arrays of active waves per channel
+  const waveRuntimeRef = useRef<WaveEntry[][]>([[], [], []]);
+
+  const vertexShaderRef = useRef(buildVertexShader(terrainState.noiseType, SLOTS_PER_CHANNEL));
 
   // Build geometry sized to fill the far clip range
   const buildGeometry = useCallback((density: number, far: number) => {
@@ -857,10 +906,92 @@ function TerrainPoints({
     u.uColorLow.value.copy(hexToVec3(t.colorLow));
     u.uColorHigh.value.copy(hexToVec3(t.colorHigh));
 
+    // ── Shock wave per-frame updates ──────────────────────────
+    {
+      const wu = u as unknown as AnyUniforms;
+      const swSettings = useShockWaveStore.getState().waves;
+      const audio = useAudioStore.getState();
+      // Compute car world position (same math as RetroCar, including surge)
+      const curveAmp = t.roadCurveAmplitude;
+      const curveFreq = t.roadCurveFrequency;
+      const roadCenterX = curveAmp * Math.sin(scrollZRef.current * curveFreq);
+      const dxdz = curveAmp * curveFreq * Math.cos(scrollZRef.current * curveFreq);
+      const tangentLen = Math.sqrt(dxdz * dxdz + 1);
+      const perpX = 1 / tangentLen;
+      const perpZ = -dxdz / tangentLen;
+      const carWorldX = roadCenterX + carXRef.current * perpX;
+      const carWorldZ = scrollZRef.current + carXRef.current * perpZ + surgeOffsetRef.current;
+
+      for (let ch = 0; ch < 3; ch++) {
+        const ws = swSettings[ch];
+        const waves = waveRuntimeRef.current[ch];
+        const lifetime = ws.lifetime ?? 2.0;
+
+        if (!ws.enabled) {
+          waveRuntimeRef.current[ch] = [];
+          for (let s = 0; s < SLOTS_PER_CHANNEL; s++) {
+            const u_active = wu[`uWaveActive${ch * SLOTS_PER_CHANNEL + s}`];
+            if (u_active) u_active.value = 0;
+          }
+          continue;
+        }
+
+        // Trigger logic: always spawn a new wave when audio exceeds threshold
+        const normVal = getNormalizedAudioValue(audio, ws.audioFeature);
+        const shaped = Math.pow(normVal, 1.0 / ws.audioSensitivity);
+        if (shaped > ws.triggerThreshold) {
+          // Retrigger guard: skip if youngest wave is too new
+          const tooYoung = waves.length > 0 && waves[waves.length - 1].age < 0.05 * lifetime;
+          if (!tooYoung) {
+            waves.push({ progress: 0, age: 0, originX: carWorldX, originZ: carWorldZ });
+          }
+        }
+
+        // Advance all waves, remove expired
+        for (let i = waves.length - 1; i >= 0; i--) {
+          const w = waves[i];
+          w.age += delta;
+          w.progress = Math.min(w.progress + delta * ws.speed, 1.0);
+          if (w.age >= lifetime) {
+            waves.splice(i, 1);
+          }
+        }
+
+        // Write the most recent waves to shader uniforms (up to SLOTS_PER_CHANNEL)
+        for (let s = 0; s < SLOTS_PER_CHANNEL; s++) {
+          const idx = ch * SLOTS_PER_CHANNEL + s;
+          if (!wu[`uWaveActive${idx}`]) continue; // guard stale uniforms
+          const w = s < waves.length ? waves[waves.length - 1 - s] : null;
+
+          if (w) {
+            const lifeFrac = lifetime > 0 ? Math.min(w.age / lifetime, 1.0) : 0;
+            (wu[`uWaveOrigin${idx}`].value as THREE.Vector3).set(carWorldX, 0, carWorldZ);
+            wu[`uWaveProgress${idx}`].value = w.progress;
+            wu[`uWaveLifeFrac${idx}`].value = lifeFrac;
+            wu[`uWaveMaxRadius${idx}`].value = ws.maxRadius;
+            wu[`uWaveRingWidth${idx}`].value = ws.ringWidth;
+            wu[`uWaveWidthFade${idx}`].value = ws.ringWidthFade;
+            wu[`uWaveHeight${idx}`].value = ws.heightDisplacement;
+            wu[`uWaveActive${idx}`].value = 1;
+            wu[`uWaveFadeExp${idx}`].value = ws.fadeExponent;
+            wu[`uWaveFadeStart${idx}`].value = ws.fadeStart;
+            wu[`uWaveRingShape${idx}`].value = ws.ringShape ?? 0.7;
+          } else {
+            wu[`uWaveActive${idx}`].value = 0;
+          }
+        }
+
+        // Per-channel color/emissive
+        const wc = new THREE.Color(ws.color);
+        (wu[`uWaveColor${ch}`].value as THREE.Vector3).set(wc.r, wc.g, wc.b);
+        wu[`uWaveEmissive${ch}`].value = ws.emissiveBoost;
+      }
+    }
+
     // ── Rebuild vertex shader if noise type changed ─────────
     if (t.noiseType !== noiseTypeRef.current) {
       noiseTypeRef.current = t.noiseType;
-      const newVert = buildVertexShader(t.noiseType);
+      const newVert = buildVertexShader(t.noiseType, SLOTS_PER_CHANNEL);
       vertexShaderRef.current = newVert;
       if (materialRef.current) {
         materialRef.current.vertexShader = newVert;
@@ -952,8 +1083,12 @@ function TerrainPoints({
 /* ── Road mesh (independent density/point size) ────────────────── */
 function RoadPoints({
   scrollZRef,
+  carXRef,
+  surgeOffsetRef,
 }: {
   scrollZRef: React.MutableRefObject<number>;
+  carXRef: React.MutableRefObject<number>;
+  surgeOffsetRef: React.MutableRefObject<number>;
 }) {
   const materialRef = useRef<THREE.ShaderMaterial>(null);
   const pointsRef = useRef<THREE.Points>(null);
@@ -987,8 +1122,14 @@ function RoadPoints({
       uFootpathEnabled: { value: terrainState.footpathEnabled ? 1.0 : 0.0 },
       uOpacity: { value: terrainState.opacity },
       uEmissiveBoost: { value: 1.5 },
+      ...createWaveUniforms(),
     }))()
   );
+
+  // Shock wave runtime state for road: dynamic arrays of active waves per channel
+  const roadWaveRuntimeRef = useRef<WaveEntry[][]>([[], [], []]);
+
+  const roadVertexShaderRef = useRef(buildRoadVertexShader(SLOTS_PER_CHANNEL));
 
   // Build road strip geometry: narrow plane covering road + footpaths
   const buildRoadGeometry = useCallback(
@@ -1026,7 +1167,7 @@ function RoadPoints({
     ]
   );
 
-  useFrame(() => {
+  useFrame((_state, delta) => {
     const t = useTerrainStore.getState();
     const u = uniformsRef.current;
 
@@ -1048,6 +1189,85 @@ function RoadPoints({
     u.uFootpathEdgeSoftness.value = t.footpathEdgeSoftness;
     u.uFootpathEnabled.value = t.footpathEnabled ? 1.0 : 0.0;
     u.uOpacity.value = t.opacity;
+
+    // ── Shock wave per-frame updates (road) ───────────────────
+    {
+      const wu = u as unknown as AnyUniforms;
+      const swSettings = useShockWaveStore.getState().waves;
+      const audio = useAudioStore.getState();
+      const curveAmp = t.roadCurveAmplitude;
+      const curveFreq = t.roadCurveFrequency;
+      const roadCenterX = curveAmp * Math.sin(scrollZRef.current * curveFreq);
+      const dxdz = curveAmp * curveFreq * Math.cos(scrollZRef.current * curveFreq);
+      const tangentLen = Math.sqrt(dxdz * dxdz + 1);
+      const perpX = 1 / tangentLen;
+      const perpZ = -dxdz / tangentLen;
+      const carWorldX = roadCenterX + carXRef.current * perpX;
+      const carWorldZ = scrollZRef.current + carXRef.current * perpZ + surgeOffsetRef.current;
+
+      for (let ch = 0; ch < 3; ch++) {
+        const ws = swSettings[ch];
+        const waves = roadWaveRuntimeRef.current[ch];
+        const lifetime = ws.lifetime ?? 2.0;
+
+        if (!ws.enabled) {
+          roadWaveRuntimeRef.current[ch] = [];
+          for (let s = 0; s < SLOTS_PER_CHANNEL; s++) {
+            const u_active = wu[`uWaveActive${ch * SLOTS_PER_CHANNEL + s}`];
+            if (u_active) u_active.value = 0;
+          }
+          continue;
+        }
+
+        // Trigger logic: always spawn a new wave when audio exceeds threshold
+        const normVal = getNormalizedAudioValue(audio, ws.audioFeature);
+        const shaped = Math.pow(normVal, 1.0 / ws.audioSensitivity);
+        if (shaped > ws.triggerThreshold) {
+          const tooYoung = waves.length > 0 && waves[waves.length - 1].age < 0.05 * lifetime;
+          if (!tooYoung) {
+            waves.push({ progress: 0, age: 0, originX: carWorldX, originZ: carWorldZ });
+          }
+        }
+
+        // Advance all waves, remove expired
+        for (let i = waves.length - 1; i >= 0; i--) {
+          const w = waves[i];
+          w.age += delta;
+          w.progress = Math.min(w.progress + delta * ws.speed, 1.0);
+          if (w.age >= lifetime) {
+            waves.splice(i, 1);
+          }
+        }
+
+        // Write the most recent waves to shader uniforms (up to SLOTS_PER_CHANNEL)
+        for (let s = 0; s < SLOTS_PER_CHANNEL; s++) {
+          const idx = ch * SLOTS_PER_CHANNEL + s;
+          if (!wu[`uWaveActive${idx}`]) continue; // guard stale uniforms
+          const w = s < waves.length ? waves[waves.length - 1 - s] : null;
+
+          if (w) {
+            const lifeFrac = lifetime > 0 ? Math.min(w.age / lifetime, 1.0) : 0;
+            (wu[`uWaveOrigin${idx}`].value as THREE.Vector3).set(carWorldX, 0, carWorldZ);
+            wu[`uWaveProgress${idx}`].value = w.progress;
+            wu[`uWaveLifeFrac${idx}`].value = lifeFrac;
+            wu[`uWaveMaxRadius${idx}`].value = ws.maxRadius;
+            wu[`uWaveRingWidth${idx}`].value = ws.ringWidth;
+            wu[`uWaveWidthFade${idx}`].value = ws.ringWidthFade;
+            wu[`uWaveHeight${idx}`].value = ws.heightDisplacement;
+            wu[`uWaveActive${idx}`].value = 1;
+            wu[`uWaveFadeExp${idx}`].value = ws.fadeExponent;
+            wu[`uWaveFadeStart${idx}`].value = ws.fadeStart;
+            wu[`uWaveRingShape${idx}`].value = ws.ringShape ?? 0.7;
+          } else {
+            wu[`uWaveActive${idx}`].value = 0;
+          }
+        }
+
+        const wc = new THREE.Color(ws.color);
+        (wu[`uWaveColor${ch}`].value as THREE.Vector3).set(wc.r, wc.g, wc.b);
+        wu[`uWaveEmissive${ch}`].value = ws.emissiveBoost;
+      }
+    }
 
     // Rebuild geometry if road shape or density changed
     if (
@@ -1083,7 +1303,7 @@ function RoadPoints({
     <points ref={pointsRef} geometry={geometry} frustumCulled={false}>
       <shaderMaterial
         ref={materialRef}
-        vertexShader={roadVertexShader}
+        vertexShader={roadVertexShaderRef.current}
         fragmentShader={roadFragmentShader}
         uniforms={uniformsRef.current}
         transparent
@@ -1099,6 +1319,7 @@ function Scene() {
   const carXRef = useRef(0);
   const initialCruise = useTerrainStore.getState().moveSpeed * 0.5;
   const forwardSpeedRef = useRef(initialCruise);
+  const surgeOffsetRef = useRef(0);
   const keysRef = useKeyboard();
   const tirePositionsRef = useRef<TireWorldPositions>({
     rearLeft: new THREE.Vector3(),
@@ -1115,14 +1336,16 @@ function Scene() {
         scrollZRef={scrollZRef}
         carXRef={carXRef}
         forwardSpeedRef={forwardSpeedRef}
+        surgeOffsetRef={surgeOffsetRef}
       />
-      <RoadPoints scrollZRef={scrollZRef} />
+      <RoadPoints scrollZRef={scrollZRef} carXRef={carXRef} surgeOffsetRef={surgeOffsetRef} />
       <RetroCar
         scrollZRef={scrollZRef}
         carXRef={carXRef}
         forwardSpeedRef={forwardSpeedRef}
         keysRef={keysRef}
         tirePositionsRef={tirePositionsRef}
+        surgeOffsetRef={surgeOffsetRef}
       />
       <TronTrails tirePositionsRef={tirePositionsRef} />
       <PostProcessingEffects />

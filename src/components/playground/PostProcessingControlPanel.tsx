@@ -3,10 +3,14 @@
 import { useRef, useEffect } from "react";
 import { useControls, folder, LevaPanel, useCreateStore } from "leva";
 import { usePostProcessingStore } from "@/store/postProcessingStore";
+import { useControlTooltips, ControlTooltipPortal } from "./ControlTooltip";
+import { POST_PROCESSING_TOOLTIPS, getPostProcessingValue } from "./postProcessingTooltips";
 
 export function PostProcessingControlPanel() {
   const levaStore = useCreateStore();
   const skipSync = useRef(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const activeTooltip = useControlTooltips(panelRef, POST_PROCESSING_TOOLTIPS);
 
   const initial = usePostProcessingStore.getState();
 
@@ -636,7 +640,7 @@ export function PostProcessingControlPanel() {
   );
 
   return (
-    <div className="leva-scrollable">
+    <div className="leva-scrollable" ref={panelRef}>
       <LevaPanel
         store={levaStore}
         flat={false}
@@ -658,6 +662,7 @@ export function PostProcessingControlPanel() {
           sizes: { rootWidth: "280px", controlWidth: "140px" },
         }}
       />
+      {activeTooltip && <ControlTooltipPortal tooltip={activeTooltip} getValue={getPostProcessingValue} />}
     </div>
   );
 }

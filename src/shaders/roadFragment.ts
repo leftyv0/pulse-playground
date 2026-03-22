@@ -10,8 +10,19 @@ uniform float uFootpathEnabled;
 uniform float uOpacity;
 uniform float uEmissiveBoost;
 
+// Shock wave color uniforms
+uniform vec3  uWaveColor0;
+uniform float uWaveEmissive0;
+uniform vec3  uWaveColor1;
+uniform float uWaveEmissive1;
+uniform vec3  uWaveColor2;
+uniform float uWaveEmissive2;
+
 varying float vLocalX;
 varying float vFalloff;
+varying float vWaveMask0;
+varying float vWaveMask1;
+varying float vWaveMask2;
 
 void main() {
   // Circular point
@@ -44,6 +55,11 @@ void main() {
   // HDR emissive boost (match terrain)
   float luminance = dot(color, vec3(0.299, 0.587, 0.114));
   color *= 1.0 + luminance * uEmissiveBoost;
+
+  // Shock wave color tinting
+  color = mix(color, uWaveColor0 * uWaveEmissive0, vWaveMask0);
+  color = mix(color, uWaveColor1 * uWaveEmissive1, vWaveMask1);
+  color = mix(color, uWaveColor2 * uWaveEmissive2, vWaveMask2);
 
   gl_FragColor = vec4(color, uOpacity * totalMask * vFalloff);
 }

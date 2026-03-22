@@ -5,10 +5,21 @@ uniform vec3 uColorHigh;
 uniform float uOpacity;
 uniform float uEmissiveBoost;
 
+// Shock wave color uniforms
+uniform vec3  uWaveColor0;
+uniform float uWaveEmissive0;
+uniform vec3  uWaveColor1;
+uniform float uWaveEmissive1;
+uniform vec3  uWaveColor2;
+uniform float uWaveEmissive2;
+
 varying float vHeight;
 varying float vRoadMask;
 varying float vFootpathMask;
 varying float vFalloff;
+varying float vWaveMask0;
+varying float vWaveMask1;
+varying float vWaveMask2;
 
 void main() {
   // Circular point discard
@@ -31,6 +42,11 @@ void main() {
   // HDR emissive boost — push bright areas above 1.0 so bloom can pick them up
   float luminance = dot(terrainColor, vec3(0.299, 0.587, 0.114));
   terrainColor *= 1.0 + luminance * uEmissiveBoost;
+
+  // Shock wave color tinting
+  terrainColor = mix(terrainColor, uWaveColor0 * uWaveEmissive0, vWaveMask0);
+  terrainColor = mix(terrainColor, uWaveColor1 * uWaveEmissive1, vWaveMask1);
+  terrainColor = mix(terrainColor, uWaveColor2 * uWaveEmissive2, vWaveMask2);
 
   gl_FragColor = vec4(terrainColor, uOpacity * vFalloff);
 }

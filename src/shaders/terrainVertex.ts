@@ -1,7 +1,8 @@
 import { NOISE_MAP } from "./noise";
 import type { NoiseType } from "@/store/terrainStore";
+import { generateWaveUniforms, generateWaveBlocks } from "./waveShaderUtils";
 
-export function buildVertexShader(noiseType: NoiseType): string {
+export function buildVertexShader(noiseType: NoiseType, slotsPerChannel = 4): string {
   const noiseGlsl = NOISE_MAP[noiseType];
 
   return /* glsl */ `
@@ -22,6 +23,9 @@ uniform float uPointSizeFalloff;
 uniform float uNearFade;
 uniform float uLateralFalloff;
 
+// Shock wave uniforms
+${generateWaveUniforms(slotsPerChannel)}
+
 // Road uniforms
 uniform float uRoadEnabled;
 uniform float uRoadWidth;
@@ -40,6 +44,9 @@ varying float vHeight;
 varying float vRoadMask;
 varying float vFootpathMask;
 varying float vFalloff;
+varying float vWaveMask0;
+varying float vWaveMask1;
+varying float vWaveMask2;
 
 ${noiseGlsl}
 
@@ -80,6 +87,9 @@ void main() {
 
   // Flatten height on road and footpaths
   pos.y = mix(h, 0.0, flattenFactor);
+
+  // Shock wave displacement (accumulated per channel)
+${generateWaveBlocks(slotsPerChannel)}
 
   vHeight = clamp((pos.y / max(uAmplitude, 0.01)) * 0.5 + 0.5, 0.0, 1.0);
   vRoadMask = roadFactor;

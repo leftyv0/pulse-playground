@@ -1,4 +1,7 @@
-export const roadVertexShader = /* glsl */ `
+import { generateWaveUniforms, generateWaveBlocks } from "./waveShaderUtils";
+
+export function buildRoadVertexShader(slotsPerChannel = 4): string {
+  return /* glsl */ `
 uniform float uCameraZ;
 uniform float uGridSize;
 uniform float uRoadCurveAmplitude;
@@ -9,8 +12,14 @@ uniform float uFalloffEnd;
 uniform float uPointSizeFalloff;
 uniform float uNearFade;
 
+// Shock wave uniforms
+${generateWaveUniforms(slotsPerChannel)}
+
 varying float vLocalX;
 varying float vFalloff;
+varying float vWaveMask0;
+varying float vWaveMask1;
+varying float vWaveMask2;
 
 void main() {
   vec3 pos = position;
@@ -28,6 +37,9 @@ void main() {
 
   // Road surface is flat at Y = 0
   pos.y = 0.0;
+
+  // Shock wave displacement (accumulated per channel)
+${generateWaveBlocks(slotsPerChannel)}
 
   vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
 
@@ -47,3 +59,7 @@ void main() {
   gl_Position = projectionMatrix * mvPosition;
 }
 `;
+}
+
+/** @deprecated Use buildRoadVertexShader() instead */
+export const roadVertexShader = buildRoadVertexShader(4);
